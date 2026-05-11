@@ -1,0 +1,134 @@
+# Research sources for the AI RFP / Enterprise Knowledge Agent synthetic sample pipeline.
+#
+# IMPORTANT: These files are used for structural reference only.
+# Raw source files are stored in research/raw/ which is gitignored.
+# Do NOT reproduce source text in any committed file.
+# See docs/synthetic-data-methodology.md for the full methodology.
+#
+# source_type values:
+#   public_rfp_response | public_proposal_response | rfp_template |
+#   supplier_response_form | contract_award_pack | exemplar_template
+#
+# sector values:
+#   fintech | legaltech | enterprise_ai | cloud_services |
+#   consulting | hardware_operations | public_sector_technology
+
+- id: naspo-ai-services-rfp-template
+  title: NASPO ValuePoint AI and Emerging Technology Services RFP Template
+  source_url: https://www.naspovaluepoint.org/portfolio/artificial-intelligence/
+  source_type: rfp_template
+  sector: public_sector_technology
+  document_kind: rfp_template
+  notes: "NASPO cooperative purchasing RFP template for AI/tech services"
+  allowed_use_notes: "Publicly available government procurement template — structural reference only"
+  include_in_analysis: true
+
+- id: uk-contracts-finder-ai-template
+  title: UK Crown Commercial Service G-Cloud Technology Services Framework Template
+  source_url: https://www.gov.uk/guidance/g-cloud-suppliers-guide
+  source_type: rfp_template
+  sector: enterprise_ai
+  document_kind: rfp_template
+  notes: "UK government G-Cloud supplier guidance and response template"
+  allowed_use_notes: "Published under Open Government Licence — structural reference only"
+  include_in_analysis: true
+
+- id: world-bank-digital-transformation-rfp
+  title: World Bank Digital Transformation and AI Implementation RFP
+  source_url: https://projects.worldbank.org/en/projects-operations/procurement
+  source_type: rfp_template
+  sector: enterprise_ai
+  document_kind: rfp_template
+  notes: "World Bank procurement portal — AI/digital transformation RFPs"
+  allowed_use_notes: "Public procurement document — structural reference only"
+  include_in_analysis: true
+
+- id: state-of-california-ai-rfp
+  title: California Department of Technology AI Services Solicitation Template
+  source_url: https://www.dgs.ca.gov/OLS/Resources/Page-Content/Office-of-Legal-Services-Resources-List-Folder/Standard-Contract-Forms-and-Documents
+  source_type: rfp_template
+  sector: public_sector_technology
+  document_kind: rfp_template
+  notes: "California standard technology contract template"
+  allowed_use_notes: "Public domain government document — structural reference only"
+  include_in_analysis: true
+
+- id: txshare-technology-rfp-2023
+  title: TXShare / NCTCOG Technology Services RFP Template
+  source_url: https://www.txshare.org/cooperative-purchasing
+  source_type: rfp_template
+  sector: public_sector_technology
+  document_kind: rfp_template
+  notes: "Texas cooperative purchasing technology services template"
+  allowed_use_notes: "Public procurement template — structural reference only"
+  include_in_analysis: true
+
+- id: nist-ai-rmf-implementation-guide
+  title: NIST AI Risk Management Framework Implementation Guide
+  source_url: https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf
+  source_type: exemplar_template
+  sector: enterprise_ai
+  document_kind: methodology_document
+  notes: "NIST official AI RMF publication — useful for security/compliance section structure"
+  allowed_use_notes: "US government publication in public domain — structural reference only"
+  include_in_analysis: true
+
+- id: uk-ico-ai-governance-template
+  title: UK ICO AI and Data Protection Guidance Template
+  source_url: https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/artificial-intelligence/guidance-on-ai-and-data-protection/
+  source_type: exemplar_template
+  sector: fintech
+  document_kind: compliance_template
+  notes: "UK ICO AI governance guidance — useful for security/compliance structure"
+  allowed_use_notes: "Published under Open Government Licence — structural reference only"
+  include_in_analysis: true
+
+- id: hm-treasury-fintech-regulation-framework
+  title: HM Treasury Fintech Regulation and AI Use Case Framework
+  source_url: https://www.gov.uk/government/publications/financial-services-and-markets-act-2023
+  source_type: exemplar_template
+  sector: fintech
+  document_kind: regulatory_framework
+  notes: "UK HM Treasury fintech regulatory guidance — AML and AI use case context"
+  allowed_use_notes: "Published under Open Government Licence — structural reference only"
+  include_in_analysis: true
+
+- id: eu-ai-act-procurement-guidance
+  title: EU AI Act High-Risk AI System Procurement Guidance
+  source_url: https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai
+  source_type: exemplar_template
+  sector: enterprise_ai
+  document_kind: regulatory_framework
+  notes: "EU AI Act compliance guidance for procurement — useful for risk/compliance sections"
+  allowed_use_notes: "EU Commission public document — structural reference only"
+  include_in_analysis: true
+
+- id: legaltech-innovation-report-2023
+  title: Legal Technology Innovation and AI Adoption Framework (Law Society)
+  source_url: https://www.lawsociety.org.uk/topics/research/technology-and-law-solicitors-regulatory-authority
+  source_type: exemplar_template
+  sector: legaltech
+  document_kind: sector_framework
+  notes: "Law Society guidance on AI in legal practice — useful for legaltech case study structure"
+  allowed_use_notes: "Publicly published guidance — structural reference only"
+  include_in_analysis: true
+
+- id: iso-27001-compliance-template
+  title: ISO/IEC 27001 Information Security Management Template Structure
+  source_url: https://www.iso.org/isoiec-27001-information-security.html
+  source_type: exemplar_template
+  sector: enterprise_ai
+  document_kind: compliance_template
+  notes: "ISO 27001 standard structure reference for security note sections"
+  allowed_use_notes: "Standard structure reference only — do not reproduce standard text"
+  include_in_analysis: false
+
+- id: finra-aml-compliance-guide
+  title: FINRA AML Compliance Programme Guidance
+  source_url: https://www.finra.org/rules-guidance/key-topics/aml
+  source_type: exemplar_template
+  sector: fintech
+  document_kind: compliance_template
+  notes: "FINRA AML guidance — useful for fintech AML case study context and terminology"
+  allowed_use_notes: "Public regulatory guidance — structural reference only"
+  include_in_analysis: true

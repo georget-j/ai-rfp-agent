@@ -1,0 +1,13 @@
+# Research pipeline dependencies — NOT part of the Next.js app runtime.
+# Install with: pip install -r requirements-research.txt
+#
+# These are used only by scripts/ for downloading, extracting, analysing,
+# and generating synthetic sample data. They are not imported by any
+# TypeScript/Next.js code.
+
+requests>=2.31
+pyyaml>=6.0
+pypdf>=4.0
+python-docx>=1.1
+beautifulsoup4>=4.12
+openai>=1.0

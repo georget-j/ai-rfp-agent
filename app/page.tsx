@@ -1,21 +1,45 @@
 import Link from 'next/link'
 import { SampleDataLoader } from '@/components/SampleDataLoader'
 import { getServiceSupabase } from '@/lib/supabase'
+import { fileBadge, EXT_CLASSES } from '@/lib/file-type'
 
-async function getDocumentCount() {
+async function getKnowledgeBaseStats() {
   try {
     const supabase = getServiceSupabase()
-    const { count } = await supabase
-      .from('documents')
-      .select('id', { count: 'exact', head: true })
-    return count ?? 0
+
+    const [{ data: docs, error: docsError }, { count: chunkCount, error: chunksError }] =
+      await Promise.all([
+        supabase.from('documents').select('file_name'),
+        supabase.from('document_chunks').select('id', { count: 'exact', head: true }),
+      ])
+
+    if (docsError || chunksError) return null
+
+    const extCounts: Record<string, number> = {}
+    for (const doc of docs ?? []) {
+      const ext = doc.file_name
+        ? (doc.file_name.split('.').pop()?.toLowerCase() ?? 'other')
+        : 'other'
+      extCounts[ext] = (extCounts[ext] ?? 0) + 1
+    }
+
+    const by_type = Object.entries(extCounts)
+      .map(([ext, count]) => ({ ext, count }))
+      .sort((a, b) => b.count - a.count)
+
+    return {
+      total_documents: docs?.length ?? 0,
+      total_chunks: chunkCount ?? 0,
+      by_type,
+    }
   } catch {
     return null
   }
 }
 
 export default async function HomePage() {
-  const docCount = await getDocumentCount()
+  const stats = await getKnowledgeBaseStats()
+  const docCount = stats?.total_documents ?? null
 
   return (
     <div className="max-w-3xl">
@@ -31,20 +55,52 @@ export default async function HomePage() {
         </p>
       </div>
 
-      {/* Status */}
-      {docCount !== null && (
-        <div className="mb-6 flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${docCount > 0 ? 'bg-green-400' : 'bg-gray-300'}`} />
-          <span className="text-sm text-gray-600">
-            {docCount > 0
-              ? `${docCount} document${docCount !== 1 ? 's' : ''} indexed`
-              : 'No documents indexed yet'}
-          </span>
-          {docCount > 0 && (
-            <Link href="/ask" className="text-sm text-blue-600 hover:underline ml-1">
-              Ask a question →
+      {/* Knowledge base stats */}
+      {stats && stats.total_documents > 0 && (
+        <div className="mb-8 p-4 bg-white border border-gray-200 rounded-xl">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-gray-900">Knowledge base</h2>
+            <Link href="/documents" className="text-xs text-blue-600 hover:underline">
+              Manage →
             </Link>
+          </div>
+          <div className="flex items-center gap-6 mb-3">
+            <div>
+              <p className="text-2xl font-semibold text-gray-900">{stats.total_documents}</p>
+              <p className="text-xs text-gray-500">document{stats.total_documents !== 1 ? 's' : ''}</p>
+            </div>
+            <div>
+              <p className="text-2xl font-semibold text-gray-900">{stats.total_chunks.toLocaleString()}</p>
+              <p className="text-xs text-gray-500">chunks indexed</p>
+            </div>
+          </div>
+          {stats.by_type.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {stats.by_type.map(({ ext, count }) => {
+                const badge = fileBadge(`file.${ext}`) ?? {
+                  label: ext.toUpperCase(),
+                  className: 'bg-gray-100 text-gray-600',
+                }
+                return (
+                  <span
+                    key={ext}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${badge.className}`}
+                  >
+                    {badge.label}
+                    <span className="opacity-60">{count}</span>
+                  </span>
+                )
+              })}
+            </div>
           )}
+        </div>
+      )}
+
+      {/* Empty state status */}
+      {docCount !== null && docCount === 0 && (
+        <div className="mb-6 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-gray-300" />
+          <span className="text-sm text-gray-600">No documents indexed yet</span>
         </div>
       )}
 
@@ -55,7 +111,7 @@ export default async function HomePage() {
         <div className="p-5 bg-white border border-gray-200 rounded-xl">
           <h3 className="text-sm font-semibold text-gray-900 mb-1">Upload Your Own</h3>
           <p className="text-xs text-gray-500 mb-3">
-            Upload .txt or .md files to add your own documents to the knowledge base.
+            Upload PDF, DOCX, CSV, XLSX, HTML, JSON, Markdown, or plain text files.
           </p>
           <Link
             href="/documents"

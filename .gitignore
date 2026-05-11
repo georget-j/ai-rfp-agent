@@ -48,3 +48,9 @@ AGENTS.md
 
 # Supabase CLI state
 supabase/.temp/
+
+# Research pipeline — raw source files and extracted text must never be committed
+research/raw/*
+!research/raw/.gitkeep
+research/extracted/*
+!research/extracted/.gitkeep
