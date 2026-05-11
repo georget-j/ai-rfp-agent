@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
 import { retrieveChunks } from '@/lib/retrieval'
 import { generateRFPResponse } from '@/lib/generation'
+import { verifyCitations } from '@/lib/citations'
 import { AskRequestSchema } from '@/lib/schema'
 
 export async function POST(request: NextRequest) {
@@ -34,20 +35,28 @@ export async function POST(request: NextRequest) {
     const retrievedChunks = await retrieveChunks(query)
 
     // Generate structured response
-    const response = await generateRFPResponse(query, retrievedChunks, rfp_context)
+    const rawResponse = await generateRFPResponse(query, retrievedChunks, rfp_context)
+
+    // Strip any citations the LLM invented that weren't in the retrieved set
+    const retrievedIds = new Set(retrievedChunks.map((c) => c.id))
+    const { response, removedCount } = verifyCitations(rawResponse, retrievedIds)
+
+    if (removedCount > 0) {
+      console.warn(`[ask] Stripped ${removedCount} unverified citation(s) not in retrieved set`)
+    }
 
     // Store result
-    const retrievedIds = retrievedChunks.map((c) => c.id)
     await supabase.from('query_results').insert({
       query_id: queryRecord.id,
       answer: response,
-      retrieved_chunk_ids: retrievedIds,
+      retrieved_chunk_ids: [...retrievedIds],
     })
 
     return NextResponse.json({
       query_id: queryRecord.id,
       response,
       retrieved_chunks: retrievedChunks,
+      unverified_citations_removed: removedCount,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'

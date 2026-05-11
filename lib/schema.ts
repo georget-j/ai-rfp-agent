@@ -116,6 +116,7 @@ export type AskResponse = {
   query_id: string
   response: RFPResponse
   retrieved_chunks: RetrievedChunk[]
+  unverified_citations_removed: number
 }
 
 export type IngestResult = {
