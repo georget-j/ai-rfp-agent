@@ -7,12 +7,65 @@ import { ResponseCard } from './ResponseCard'
 import { EmptyState } from './EmptyState'
 import { LoadingState } from './LoadingState'
 import { ErrorAlert } from './ErrorAlert'
-import type { QueryHistoryItem, AskResponse } from '@/lib/schema'
+import type { QueryHistoryItem, AskResponse, RFPContext } from '@/lib/schema'
 
 const CONFIDENCE_STYLES = {
   high: 'bg-green-50 text-green-700 border-green-200',
   medium: 'bg-amber-50 text-amber-700 border-amber-200',
   low: 'bg-red-50 text-red-700 border-red-200',
+}
+
+const INDUSTRY_LABELS: Record<string, string> = {
+  fintech: 'Fintech',
+  legaltech: 'Legaltech',
+  'enterprise-saas': 'Enterprise SaaS',
+  healthcare: 'Healthcare',
+  industrial: 'Industrial',
+  other: 'Other',
+}
+
+const RESPONSE_TYPE_LABELS: Record<string, string> = {
+  'executive-summary': 'Executive summary',
+  'technical-answer': 'Technical answer',
+  'implementation-approach': 'Implementation approach',
+  'security-compliance': 'Security & compliance',
+  'case-study': 'Case study',
+  'full-rfp-draft': 'Full RFP draft',
+}
+
+const TONE_LABELS: Record<string, string> = {
+  concise: 'Concise',
+  formal: 'Formal',
+  'founder-led': 'Founder-led',
+  technical: 'Technical',
+  commercial: 'Commercial',
+}
+
+const MATURITY_LABELS: Record<string, string> = {
+  startup: 'Startup',
+  'mid-market': 'Mid-market',
+  enterprise: 'Enterprise',
+}
+
+function ContextChips({ ctx }: { ctx: RFPContext }) {
+  const chips: string[] = []
+  if (ctx.industry) chips.push(INDUSTRY_LABELS[ctx.industry] ?? ctx.industry)
+  if (ctx.response_type) chips.push(RESPONSE_TYPE_LABELS[ctx.response_type] ?? ctx.response_type)
+  if (ctx.tone) chips.push(TONE_LABELS[ctx.tone] ?? ctx.tone)
+  if (ctx.customer_maturity) chips.push(MATURITY_LABELS[ctx.customer_maturity] ?? ctx.customer_maturity)
+  if (chips.length === 0) return null
+  return (
+    <div className="flex flex-wrap gap-1 mt-1.5">
+      {chips.map((chip) => (
+        <span
+          key={chip}
+          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600 border border-blue-100"
+        >
+          {chip}
+        </span>
+      ))}
+    </div>
+  )
 }
 
 function ExpandedResponse({ queryId, onClose }: { queryId: string; onClose: () => void }) {
@@ -105,8 +158,9 @@ export function HistoryList() {
                   <p className="text-sm font-medium text-gray-900 leading-snug">
                     {truncate(item.query_text, 120)}
                   </p>
+                  {item.rfp_context && <ContextChips ctx={item.rfp_context} />}
                   {item.executive_summary && (
-                    <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
+                    <p className="text-xs text-gray-400 mt-1 leading-relaxed">
                       {truncate(item.executive_summary, 160)}
                     </p>
                   )}
