@@ -5,19 +5,18 @@ import type { RetrievedChunk } from './schema'
 export async function retrieveChunks(
   queryText: string,
   matchCount = 6,
-  similarityThreshold = 0.3,
 ): Promise<RetrievedChunk[]> {
   const queryEmbedding = await generateEmbedding(queryText)
   const supabase = getServiceSupabase()
 
-  const { data, error } = await supabase.rpc('match_document_chunks', {
+  const { data, error } = await supabase.rpc('hybrid_search_chunks', {
+    query_text: queryText,
     query_embedding: queryEmbedding,
     match_count: matchCount,
-    similarity_threshold: similarityThreshold,
   })
 
   if (error) {
-    throw new Error(`Vector search failed: ${error.message}`)
+    throw new Error(`Hybrid search failed: ${error.message}`)
   }
 
   return (data ?? []) as RetrievedChunk[]
