@@ -1,0 +1,6 @@
+Enterprise Knowledge Management
+
+This document describes best practices for enterprise knowledge management systems.
+Teams that centralise institutional knowledge see a 40% reduction in onboarding time.
+
+Key benefits include improved decision-making, faster onboarding, and reduced duplication of effort.

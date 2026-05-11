@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ingestDocument } from '@/lib/documents'
+import { extractText, ALLOWED_EXTENSIONS } from '@/lib/extractors'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-const ALLOWED_TYPES = ['text/plain', 'text/markdown', 'text/x-markdown']
-const ALLOWED_EXTENSIONS = ['.txt', '.md']
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,10 +13,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
-    const ext = '.' + file.name.split('.').pop()?.toLowerCase()
+    const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
       return NextResponse.json(
-        { error: 'Unsupported file type. Only .txt and .md files are supported.' },
+        {
+          error: `Unsupported file type "${ext}". Supported formats: ${ALLOWED_EXTENSIONS.join(', ')}`,
+        },
         { status: 400 }
       )
     }
@@ -29,25 +30,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const text = await file.text()
-    if (!text.trim()) {
+    const buffer = Buffer.from(await file.arrayBuffer())
+    const extraction = await extractText(buffer, file.name, file.type)
+
+    if (!extraction.text.trim()) {
       return NextResponse.json(
         { error: 'File appears to be empty or contains no readable text.' },
         { status: 400 }
       )
     }
 
-    const title = file.name.replace(/\.(txt|md)$/i, '').replace(/[-_]/g, ' ')
-
     const result = await ingestDocument({
-      text,
-      title,
+      text: extraction.text,
+      title: extraction.title,
       fileName: file.name,
-      mimeType: file.type || 'text/plain',
+      mimeType: file.type || 'application/octet-stream',
       sourceType: 'upload',
+      pageCount: extraction.pageCount,
+      wordCount: extraction.wordCount,
+      extractionWarnings: extraction.warnings,
+      fileSizeBytes: file.size,
     })
 
-    return NextResponse.json(result)
+    return NextResponse.json({ ...result, warnings: extraction.warnings })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     console.error('[upload]', message)

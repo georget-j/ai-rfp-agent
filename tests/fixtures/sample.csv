@@ -1,0 +1,5 @@
+product,category,price,available
+Enterprise Plan,SaaS,2499,true
+Professional Plan,SaaS,999,true
+Starter Plan,SaaS,299,true
+Implementation Services,Professional Services,15000,true

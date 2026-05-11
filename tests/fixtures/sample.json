@@ -1,0 +1,11 @@
+{
+  "company": "Acme Corp",
+  "product": "Knowledge Agent",
+  "certifications": ["SOC 2 Type II", "ISO 27001"],
+  "integrations": ["Salesforce", "HubSpot", "Slack", "Microsoft Teams"],
+  "sla": {
+    "uptime": "99.9%",
+    "support_response_p0": "4 hours",
+    "support_response_p1": "24 hours"
+  }
+}

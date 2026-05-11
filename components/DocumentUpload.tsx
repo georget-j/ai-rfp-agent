@@ -7,10 +7,14 @@ interface DocumentUploadProps {
   onSuccess?: (result: { title: string; chunk_count: number }) => void
 }
 
+const SUPPORTED_FORMATS = '.txt, .md, .pdf, .docx, .csv, .xlsx, .html, .json'
+const ACCEPT = '.txt,.md,.pdf,.docx,.csv,.xlsx,.html,.htm,.json'
+
 export function DocumentUpload({ onSuccess }: DocumentUploadProps) {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [warnings, setWarnings] = useState<string[]>([])
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -18,6 +22,7 @@ export function DocumentUpload({ onSuccess }: DocumentUploadProps) {
     setUploading(true)
     setError(null)
     setSuccess(null)
+    setWarnings([])
 
     const form = new FormData()
     form.append('file', file)
@@ -27,6 +32,7 @@ export function DocumentUpload({ onSuccess }: DocumentUploadProps) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Upload failed')
       setSuccess(`"${data.title}" indexed — ${data.chunk_count} chunks`)
+      if (data.warnings?.length) setWarnings(data.warnings)
       onSuccess?.(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
@@ -60,7 +66,7 @@ export function DocumentUpload({ onSuccess }: DocumentUploadProps) {
         <input
           ref={inputRef}
           type="file"
-          accept=".txt,.md"
+          accept={ACCEPT}
           className="hidden"
           onChange={(e) => handleFiles(e.target.files)}
         />
@@ -68,11 +74,17 @@ export function DocumentUpload({ onSuccess }: DocumentUploadProps) {
           {uploading ? 'Processing…' : 'Drop a file here or click to browse'}
         </p>
         <p className="text-xs text-gray-400 mt-1">
-          .txt and .md files supported — max 5MB
+          {SUPPORTED_FORMATS} — max 5 MB
         </p>
       </div>
 
       {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}
+
+      {warnings.map((w, i) => (
+        <div key={i} className="rounded border border-amber-200 bg-amber-50 px-4 py-2.5">
+          <p className="text-sm text-amber-700">{w}</p>
+        </div>
+      ))}
 
       {success && (
         <div className="rounded border border-green-200 bg-green-50 px-4 py-2.5">

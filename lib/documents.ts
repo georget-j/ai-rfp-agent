@@ -9,16 +9,22 @@ type IngestInput = {
   fileName?: string
   mimeType?: string
   sourceType: 'upload' | 'sample'
+  pageCount?: number
+  wordCount?: number
+  extractionWarnings?: string[]
+  fileSizeBytes?: number
 }
 
 export async function ingestDocument(input: IngestInput): Promise<IngestResult> {
-  const { text, title, fileName, mimeType, sourceType } = input
+  const {
+    text, title, fileName, mimeType, sourceType,
+    pageCount, wordCount, extractionWarnings, fileSizeBytes,
+  } = input
 
   if (!text.trim()) throw new Error('Document text is empty')
 
   const supabase = getServiceSupabase()
 
-  // Save document record
   const { data: doc, error: docError } = await supabase
     .from('documents')
     .insert({
@@ -27,6 +33,10 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
       file_name: fileName ?? null,
       mime_type: mimeType ?? null,
       raw_text: text,
+      page_count: pageCount ?? null,
+      word_count: wordCount ?? null,
+      extraction_warnings: extractionWarnings?.length ? extractionWarnings : null,
+      file_size_bytes: fileSizeBytes ?? null,
     })
     .select('id')
     .single()
@@ -35,19 +45,16 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
     throw new Error(`Failed to save document: ${docError?.message}`)
   }
 
-  // Chunk the text
   const chunks = chunkText(text, title)
   if (chunks.length === 0) throw new Error('Document produced no chunks')
 
-  // Generate embeddings in batch
   const embeddings = await generateEmbeddingsBatch(chunks.map((c) => c.content))
 
-  // Insert chunks with embeddings
   const rows = chunks.map((chunk, i) => ({
     document_id: doc.id,
     chunk_index: chunk.chunkIndex,
     content: chunk.content,
-    token_count: Math.round(chunk.content.length / 4), // rough estimate
+    token_count: Math.round(chunk.content.length / 4),
     embedding: JSON.stringify(embeddings[i]),
     metadata: { title, source_type: sourceType },
   }))
@@ -55,7 +62,6 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
   const { error: chunkError } = await supabase.from('document_chunks').insert(rows)
 
   if (chunkError) {
-    // Roll back document if chunks fail
     await supabase.from('documents').delete().eq('id', doc.id)
     throw new Error(`Failed to save chunks: ${chunkError.message}`)
   }
