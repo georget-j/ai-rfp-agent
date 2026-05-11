@@ -9,6 +9,7 @@ const NAV = [
   { href: '/documents', label: 'Documents' },
   { href: '/ask', label: 'Ask' },
   { href: '/demo', label: 'Demo' },
+  { href: '/history', label: 'History' },
 ]
 
 export function AppHeader() {

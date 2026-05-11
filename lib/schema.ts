@@ -116,7 +116,16 @@ export type AskResponse = {
   query_id: string
   response: RFPResponse
   retrieved_chunks: RetrievedChunk[]
-  unverified_citations_removed: number
+  unverified_citations_removed?: number
+}
+
+export type QueryHistoryItem = {
+  id: string
+  query_text: string
+  rfp_context: RFPContext | null
+  created_at: string
+  confidence_level: 'high' | 'medium' | 'low' | null
+  executive_summary: string | null
 }
 
 export type IngestResult = {
