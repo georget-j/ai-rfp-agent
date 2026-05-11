@@ -42,6 +42,13 @@ export function AppHeader() {
               {item.label}
             </Link>
           ))}
+          <button
+            onClick={() => window.dispatchEvent(new Event('show-welcome'))}
+            className="ml-1 w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors text-sm font-medium"
+            aria-label="About this tool"
+          >
+            ?
+          </button>
         </nav>
       </div>
     </header>
