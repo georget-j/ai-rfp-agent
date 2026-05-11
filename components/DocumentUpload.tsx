@@ -7,8 +7,18 @@ interface DocumentUploadProps {
   onSuccess?: (result: { title: string; chunk_count: number }) => void
 }
 
-const SUPPORTED_FORMATS = '.txt, .md, .pdf, .docx, .csv, .xlsx, .html, .json'
 const ACCEPT = '.txt,.md,.pdf,.docx,.csv,.xlsx,.html,.htm,.json'
+
+const FORMAT_CHIPS = [
+  { label: 'TXT',  className: 'bg-gray-100 text-gray-600' },
+  { label: 'MD',   className: 'bg-gray-100 text-gray-600' },
+  { label: 'PDF',  className: 'bg-blue-50 text-blue-600' },
+  { label: 'DOCX', className: 'bg-blue-50 text-blue-600' },
+  { label: 'CSV',  className: 'bg-green-50 text-green-700' },
+  { label: 'XLSX', className: 'bg-green-50 text-green-700' },
+  { label: 'HTML', className: 'bg-purple-50 text-purple-700' },
+  { label: 'JSON', className: 'bg-purple-50 text-purple-700' },
+]
 
 export function DocumentUpload({ onSuccess }: DocumentUploadProps) {
   const [uploading, setUploading] = useState(false)
@@ -73,9 +83,17 @@ export function DocumentUpload({ onSuccess }: DocumentUploadProps) {
         <p className="text-sm text-gray-600">
           {uploading ? 'Processing…' : 'Drop a file here or click to browse'}
         </p>
-        <p className="text-xs text-gray-400 mt-1">
-          {SUPPORTED_FORMATS} — max 5 MB
-        </p>
+        <div className="flex flex-wrap gap-1.5 justify-center mt-3">
+          {FORMAT_CHIPS.map((chip) => (
+            <span
+              key={chip.label}
+              className={`px-2 py-0.5 rounded text-xs font-medium ${chip.className}`}
+            >
+              {chip.label}
+            </span>
+          ))}
+        </div>
+        <p className="text-xs text-gray-400 mt-2">max 5 MB</p>
       </div>
 
       {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}

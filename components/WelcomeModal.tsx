@@ -8,7 +8,7 @@ const STORAGE_KEY = 'rfp_agent_welcomed_v1'
 const FEATURES = [
   {
     title: 'Document ingestion',
-    desc: 'Upload .txt or .md files, or load the built-in sample dataset. Each document is chunked, embedded, and stored in Postgres.',
+    desc: 'Upload 8 file types — PDF, DOCX, CSV, XLSX, HTML, JSON, Markdown, and plain text — or load the built-in sample dataset. Each document is chunked, embedded, and stored in Postgres.',
   },
   {
     title: 'Markdown-aware chunking',
