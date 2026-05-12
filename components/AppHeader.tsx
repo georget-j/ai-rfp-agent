@@ -11,6 +11,7 @@ const NAV = [
   { href: '/demo', label: 'Demo' },
   { href: '/history', label: 'History' },
   { href: '/rfp', label: 'RFP' },
+  { href: '/rfp/history', label: 'RFP History' },
 ]
 
 export function AppHeader() {

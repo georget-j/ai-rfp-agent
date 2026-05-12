@@ -112,7 +112,7 @@ export function RFPProcessor() {
       const res = await fetch('/api/rfp/answer-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ questions: toAnswer }),
+        body: JSON.stringify({ rfp_title: rfpTitle, questions: toAnswer }),
       })
 
       if (!res.ok) {
