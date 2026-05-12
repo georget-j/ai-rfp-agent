@@ -10,6 +10,43 @@ type Integration = {
   updated_at: string
 }
 
+type SlackPreview = {
+  topic: string
+  question: string
+  summary: string
+  confidence: string
+  risk: string
+  reviewLink: string
+}
+
+function SlackMessagePreview({ preview }: { preview: SlackPreview }) {
+  return (
+    <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs font-mono">
+      <p className="text-gray-400 mb-2 font-sans font-medium text-[11px] uppercase tracking-wide">Preview — what reviewers would see in Slack</p>
+      <div className="border-l-4 border-[#4A154B] pl-3 space-y-1.5">
+        <p className="font-semibold text-gray-900">RFP review needed: {preview.topic}</p>
+        <div>
+          <p className="text-gray-500">Question</p>
+          <p className="text-gray-800">{preview.question}</p>
+        </div>
+        <div>
+          <p className="text-gray-500">AI Draft Summary</p>
+          <p className="text-gray-800">{preview.summary}</p>
+        </div>
+        <div className="flex gap-4 text-gray-600">
+          <span>Confidence: {preview.confidence}</span>
+          <span>Risk: {preview.risk}</span>
+        </div>
+        <div>
+          <span className="inline-block bg-[#4A154B] text-white px-2 py-0.5 rounded text-[11px] font-sans">
+            Review &amp; Approve →
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const PLATFORM_CONFIG = {
   resend: {
     label: 'Email (Resend)',
@@ -37,10 +74,12 @@ function IntegrationCard({ platform, existing }: { platform: 'resend' | 'slack';
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [slackPreview, setSlackPreview] = useState<SlackPreview | null>(null)
 
   async function save() {
     setSaving(true)
     setMsg(null)
+    setSlackPreview(null)
     try {
       const res = await fetch('/api/admin/integrations', {
         method: 'POST',
@@ -60,6 +99,7 @@ function IntegrationCard({ platform, existing }: { platform: 'resend' | 'slack';
   async function test() {
     setTesting(true)
     setMsg(null)
+    setSlackPreview(null)
     try {
       const res = await fetch('/api/admin/integrations/test', {
         method: 'POST',
@@ -68,7 +108,12 @@ function IntegrationCard({ platform, existing }: { platform: 'resend' | 'slack';
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Test failed')
-      setMsg({ type: 'success', text: 'Test notification sent.' })
+      if (data.demo && data.preview) {
+        setSlackPreview(data.preview as SlackPreview)
+        setMsg({ type: 'success', text: 'Preview generated — this is what reviewers would see.' })
+      } else {
+        setMsg({ type: 'success', text: 'Test notification sent.' })
+      }
     } catch (e) {
       setMsg({ type: 'error', text: e instanceof Error ? e.message : 'Test failed' })
     } finally {
@@ -121,6 +166,8 @@ function IntegrationCard({ platform, existing }: { platform: 'resend' | 'slack';
           {msg.text}
         </p>
       )}
+
+      {slackPreview && <SlackMessagePreview preview={slackPreview} />}
 
       <div className="flex gap-2 mt-4">
         <button

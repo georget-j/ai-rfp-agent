@@ -175,6 +175,27 @@ async function sendSlackNotification(params: {
   }
 }
 
+export async function sendSlackTestNotification(webhookUrl: string): Promise<void> {
+  const payload = {
+    text: 'RFP Agent — test notification',
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '*RFP Agent test notification* ✅\nYour Slack integration is working correctly.',
+        },
+      },
+    ],
+  }
+  const res = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error(`Slack returned ${res.status}`)
+}
+
 // ── Orchestrator ──────────────────────────────────────────────────────────────
 
 export async function dispatchReviewNotification(params: {
@@ -184,6 +205,11 @@ export async function dispatchReviewNotification(params: {
   executiveSummary: string
   rfpTitle: string
 }): Promise<void> {
+  if (process.env.DEMO_MODE === 'true') {
+    console.log('[notifications] DEMO_MODE=true — skipping review notification')
+    return
+  }
+
   const { reviewRequest, routingConfig, questionText, executiveSummary, rfpTitle } = params
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
 
