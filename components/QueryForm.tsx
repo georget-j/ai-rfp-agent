@@ -1,10 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { LoadingDots } from './LoadingState'
 import { ErrorAlert } from './ErrorAlert'
 import { ResponseCard } from './ResponseCard'
-import type { AskResponse, RFPContext } from '@/lib/schema'
+import type { AskResponse, PartialRFPResponse, RFPContext, RetrievedChunk } from '@/lib/schema'
 
 const INDUSTRY_OPTIONS = [
   { value: '', label: 'Any industry' },
@@ -35,29 +34,38 @@ const TONE_OPTIONS = [
   { value: 'commercial', label: 'Commercial' },
 ]
 
+type Phase = 'idle' | 'retrieving' | 'generating' | 'done'
+
 interface QueryFormProps {
   initialQuery?: string
   initialContext?: Partial<RFPContext>
   autoSubmit?: boolean
 }
 
-export function QueryForm({ initialQuery = '', initialContext = {}, autoSubmit = false }: QueryFormProps) {
+export function QueryForm({ initialQuery = '', initialContext = {} }: QueryFormProps) {
   const [query, setQuery] = useState(initialQuery)
   const [industry, setIndustry] = useState(initialContext.industry ?? '')
   const [responseType, setResponseType] = useState(initialContext.response_type ?? '')
   const [tone, setTone] = useState(initialContext.tone ?? '')
   const [showContext, setShowContext] = useState(false)
-  const [loading, setLoading] = useState(false)
+
+  const [phase, setPhase] = useState<Phase>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [queryId, setQueryId] = useState<string | null>(null)
+  const [retrievedChunks, setRetrievedChunks] = useState<RetrievedChunk[]>([])
+  const [partial, setPartial] = useState<PartialRFPResponse | null>(null)
   const [result, setResult] = useState<AskResponse | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!query.trim()) return
 
-    setLoading(true)
+    setPhase('retrieving')
     setError(null)
     setResult(null)
+    setPartial(null)
+    setQueryId(null)
+    setRetrievedChunks([])
 
     const rfpContext: RFPContext = {}
     if (industry) rfpContext.industry = industry as RFPContext['industry']
@@ -74,19 +82,61 @@ export function QueryForm({ initialQuery = '', initialContext = {}, autoSubmit =
         }),
       })
 
-      const data = await res.json()
-
       if (!res.ok) {
+        const data = await res.json()
         throw new Error(data.error ?? 'Request failed')
       }
 
-      setResult(data)
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let latestPartial: PartialRFPResponse | null = null
+      let latestQueryId: string | null = null
+      let latestChunks: RetrievedChunk[] = []
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const messages = buffer.split('\n\n')
+        buffer = messages.pop() ?? ''
+
+        for (const msg of messages) {
+          if (!msg.startsWith('data: ')) continue
+          const event = JSON.parse(msg.slice(6))
+
+          if (event.type === 'meta') {
+            latestQueryId = event.query_id
+            latestChunks = event.retrieved_chunks
+            setQueryId(event.query_id)
+            setRetrievedChunks(event.retrieved_chunks)
+            setPhase('generating')
+          } else if (event.type === 'partial') {
+            latestPartial = event.object
+            setPartial(event.object)
+          } else if (event.type === 'done') {
+            if (latestPartial && latestQueryId) {
+              setResult({
+                query_id: latestQueryId,
+                response: latestPartial as AskResponse['response'],
+                retrieved_chunks: latestChunks,
+                unverified_citations_removed: event.removed_citations ?? 0,
+              })
+            }
+            setPhase('done')
+          } else if (event.type === 'error') {
+            throw new Error(event.message)
+          }
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
-    } finally {
-      setLoading(false)
+      setPhase('idle')
     }
   }
+
+  const isLoading = phase === 'retrieving' || phase === 'generating'
 
   return (
     <div className="space-y-6">
@@ -106,7 +156,6 @@ export function QueryForm({ initialQuery = '', initialContext = {}, autoSubmit =
           />
         </div>
 
-        {/* Optional RFP context toggle */}
         <div>
           <button
             type="button"
@@ -160,13 +209,21 @@ export function QueryForm({ initialQuery = '', initialContext = {}, autoSubmit =
 
         <button
           type="submit"
-          disabled={loading || !query.trim()}
+          disabled={isLoading || !query.trim()}
           className="px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
         >
-          {loading ? (
+          {isLoading ? (
             <>
-              <LoadingDots />
-              <span>Searching and generating…</span>
+              <span className="flex gap-0.5">
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="w-1 h-1 bg-white rounded-full animate-bounce"
+                    style={{ animationDelay: `${i * 0.15}s` }}
+                  />
+                ))}
+              </span>
+              <span>{phase === 'retrieving' ? 'Searching knowledge base…' : 'Generating response…'}</span>
             </>
           ) : (
             'Generate RFP Response'
@@ -176,7 +233,16 @@ export function QueryForm({ initialQuery = '', initialContext = {}, autoSubmit =
 
       {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}
 
-      {result && <ResponseCard result={result} />}
+      {/* Streaming / completed response */}
+      {(partial || result) && (
+        <ResponseCard
+          result={result ?? undefined}
+          partial={result ? undefined : (partial ?? undefined)}
+          retrievedChunks={retrievedChunks}
+          isStreaming={phase === 'generating'}
+          query={query}
+        />
+      )}
     </div>
   )
 }

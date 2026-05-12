@@ -94,6 +94,17 @@ export type Confidence = z.infer<typeof ConfidenceSchema>
 
 // ── Retrieval result ────────────────────────────────────────────────────────
 
+// Partial schema used during streaming — all fields optional
+export type PartialRFPResponse = {
+  draft_answer?: string
+  executive_summary?: string
+  supporting_evidence?: Array<Partial<SupportingEvidence>>
+  citations?: Array<Partial<Citation>>
+  missing_information?: Array<Partial<MissingInfo>>
+  confidence?: Partial<Confidence>
+  suggested_next_actions?: string[]
+}
+
 export type RetrievedChunk = {
   id: string
   document_id: string
@@ -127,6 +138,11 @@ export type QueryHistoryItem = {
   confidence_level: 'high' | 'medium' | 'low' | null
   executive_summary: string | null
 }
+
+export const RerankResponseSchema = z.object({
+  top_chunk_ids: z.array(z.string()),
+})
+export type RerankResponse = z.infer<typeof RerankResponseSchema>
 
 export type IngestResult = {
   document_id: string

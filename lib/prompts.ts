@@ -1,5 +1,20 @@
 import type { RetrievedChunk, RFPContext } from './schema'
 
+export function buildRerankPrompt(query: string, chunks: RetrievedChunk[]): string {
+  const list = chunks
+    .map((c, i) =>
+      `[${i + 1}] chunk_id: ${c.id}\nsource: ${c.document_title}\n${c.content.slice(0, 400)}`,
+    )
+    .join('\n\n')
+
+  return `Rank these document excerpts by relevance to the query. Return only the chunk_ids of the best ones.
+
+Query: ${query}
+
+Excerpts:
+${list}`
+}
+
 export function buildSystemPrompt(): string {
   return `You are an enterprise proposal and solutions assistant.
 

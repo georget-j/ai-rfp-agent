@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { streamObject } from 'ai'
 import { getServiceSupabase } from '@/lib/supabase'
 import { retrieveChunks } from '@/lib/retrieval'
-import { generateRFPResponse } from '@/lib/generation'
 import { verifyCitations } from '@/lib/citations'
-import { AskRequestSchema } from '@/lib/schema'
+import { buildSystemPrompt, buildUserPrompt } from '@/lib/prompts'
+import { AskRequestSchema, RFPResponseSchema } from '@/lib/schema'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { aiOpenAI, CHAT_MODEL } from '@/lib/openai'
+
+const encoder = new TextEncoder()
+
+function sseEvent(type: string, payload: unknown): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ type, ...payload as object })}\n\n`)
+}
 
 export async function POST(request: NextRequest) {
   const limited = await checkRateLimit(request, 'ask')
@@ -17,50 +25,84 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'Invalid request', details: parsed.error.flatten() },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
     const { query, rfp_context } = parsed.data
     const supabase = getServiceSupabase()
 
-    // Store query
-    const { data: queryRecord, error: queryError } = await supabase
-      .from('queries')
-      .insert({ query_text: query, rfp_context: rfp_context ?? null })
-      .select('id')
-      .single()
+    // Retrieval and query record creation in parallel
+    const [{ data: queryRecord, error: queryError }, retrievedChunks] = await Promise.all([
+      supabase
+        .from('queries')
+        .insert({ query_text: query, rfp_context: rfp_context ?? null })
+        .select('id')
+        .single(),
+      retrieveChunks(query),
+    ])
 
     if (queryError || !queryRecord) {
       throw new Error(`Failed to store query: ${queryError?.message}`)
     }
 
-    // Retrieve relevant chunks
-    const retrievedChunks = await retrieveChunks(query)
+    const systemPrompt = buildSystemPrompt()
+    const userPrompt = buildUserPrompt(query, retrievedChunks, rfp_context)
 
-    // Generate structured response
-    const rawResponse = await generateRFPResponse(query, retrievedChunks, rfp_context)
-
-    // Strip any citations the LLM invented that weren't in the retrieved set
-    const retrievedIds = new Set(retrievedChunks.map((c) => c.id))
-    const { response, removedCount } = verifyCitations(rawResponse, retrievedIds)
-
-    if (removedCount > 0) {
-      console.warn(`[ask] Stripped ${removedCount} unverified citation(s) not in retrieved set`)
-    }
-
-    // Store result
-    await supabase.from('query_results').insert({
-      query_id: queryRecord.id,
-      answer: response,
-      retrieved_chunk_ids: [...retrievedIds],
+    const { partialObjectStream, object: objectPromise } = streamObject({
+      model: aiOpenAI(CHAT_MODEL),
+      schema: RFPResponseSchema,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.2,
     })
 
-    return NextResponse.json({
-      query_id: queryRecord.id,
-      response,
-      retrieved_chunks: retrievedChunks,
-      unverified_citations_removed: removedCount,
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          // Send retrieval metadata immediately so the UI can show sources
+          controller.enqueue(
+            sseEvent('meta', { query_id: queryRecord.id, retrieved_chunks: retrievedChunks }),
+          )
+
+          for await (const partial of partialObjectStream) {
+            controller.enqueue(sseEvent('partial', { object: partial }))
+          }
+
+          // Verify citations and persist once generation is complete
+          const rawResponse = await objectPromise
+          const retrievedIds = new Set(retrievedChunks.map((c) => c.id))
+          const { response, removedCount } = verifyCitations(rawResponse, retrievedIds)
+
+          if (removedCount > 0) {
+            console.warn(`[ask] Stripped ${removedCount} unverified citation(s)`)
+          }
+
+          await supabase.from('query_results').insert({
+            query_id: queryRecord.id,
+            answer: response,
+            retrieved_chunk_ids: [...retrievedIds],
+          })
+
+          controller.enqueue(sseEvent('done', { removed_citations: removedCount }))
+          controller.close()
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Unknown error'
+          console.error('[ask]', message)
+          controller.enqueue(sseEvent('error', { message }))
+          controller.close()
+        }
+      },
+    })
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no',
+      },
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'

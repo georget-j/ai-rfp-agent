@@ -10,6 +10,7 @@ const NAV = [
   { href: '/ask', label: 'Ask' },
   { href: '/demo', label: 'Demo' },
   { href: '/history', label: 'History' },
+  { href: '/rfp', label: 'RFP' },
 ]
 
 export function AppHeader() {
