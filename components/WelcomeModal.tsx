@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 
-const STORAGE_KEY = 'rfp_agent_welcomed_v1'
+const STORAGE_KEY = 'rfp_agent_welcomed_v2'
 
 const FEATURES = [
   {
@@ -11,20 +11,24 @@ const FEATURES = [
     desc: 'Upload 8 file types — PDF, DOCX, CSV, XLSX, HTML, JSON, Markdown, and plain text — or load the built-in sample dataset. Each document is chunked, embedded, and stored in Postgres.',
   },
   {
-    title: 'Markdown-aware chunking',
-    desc: 'Documents are split on ## section boundaries so each chunk covers one topic. Every chunk is prefixed with [Document > Section] for a cleaner embedding signal.',
+    title: 'Hybrid search + LLM reranking',
+    desc: 'Queries run BM25 keyword search and pgvector semantic search in parallel, fused with Reciprocal Rank Fusion. A second gpt-4o-mini pass then reranks the top 14 candidates down to the 6 most genuinely relevant chunks before generation.',
   },
   {
-    title: 'Semantic search via pgvector',
-    desc: 'Queries are embedded with the same model as the documents, then matched by cosine similarity — no separate vector database needed.',
-  },
-  {
-    title: 'Structured generation',
-    desc: 'gpt-4o-mini returns a Zod-validated JSON response covering draft answer, executive summary, evidence, citations, missing info flags, confidence level, and next actions.',
+    title: 'Streaming structured generation',
+    desc: 'Responses stream token-by-token via Server-Sent Events. The draft answer and executive summary appear within ~1 second; citations, confidence, and missing-info flags fade in as the stream completes.',
   },
   {
     title: 'Citation verification',
     desc: 'After generation, every cited chunk ID is checked against what was actually retrieved. Citations the model invented are stripped before the response is returned.',
+  },
+  {
+    title: 'In-app editing + Word export',
+    desc: 'Draft answers are editable inline and saved back to the database. Any response can be exported as a formatted .docx file with executive summary, full draft, citations, confidence level, and next actions.',
+  },
+  {
+    title: 'Full RFP document processing',
+    desc: 'Upload a complete RFP PDF or DOCX on the RFP page. The agent extracts every numbered requirement, lets you review and remove questions, then answers all selected requirements in parallel with a live progress bar. Export the complete response document as Word.',
   },
   {
     title: 'Query history',
@@ -114,8 +118,8 @@ export function WelcomeModal() {
           <ol className="space-y-1.5 mb-5">
             {[
               'Load the sample dataset from the Dashboard',
-              'Go to Ask and type an RFP question',
-              'Check History to review and re-run past queries',
+              'Go to Ask to type a single RFP question, or RFP to process a full document',
+              'Edit the draft inline, export as Word, or check History to re-run past queries',
             ].map((step, i) => (
               <li key={i} className="flex items-start gap-2.5 text-xs text-gray-600">
                 <span className="w-4 h-4 rounded-full bg-gray-200 text-gray-500 text-[10px] font-semibold flex items-center justify-center shrink-0 mt-0.5">
