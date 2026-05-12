@@ -87,6 +87,7 @@ const AUDIT_ICON: Record<string, string> = {
   commented: '◎',
   escalated: '↑',
   assigned: '→',
+  info_requested: '✉',
 }
 
 function riskBadgeVariant(risk: string) {
@@ -111,6 +112,8 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
   const [ingestedToKB, setIngestedToKB] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [routingConfigs, setRoutingConfigs] = useState<Record<string, string>>({})
+  const [notifiedItems, setNotifiedItems] = useState<Set<number>>(new Set())
+  const [notifyingItem, setNotifyingItem] = useState<number | null>(null)
 
   // Comments
   const [comments, setComments] = useState<Comment[]>([])
@@ -204,6 +207,34 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
       setCommentErr(e instanceof Error ? e.message : 'Failed to post comment')
     } finally {
       setPostingComment(false)
+    }
+  }
+
+  async function notifyTeam(index: number, item: string, whyItMatters: string | undefined, ownerTopic: string) {
+    setNotifyingItem(index)
+    try {
+      const res = await fetch(`/api/review/${review.id}/notify-missing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item, why_it_matters: whyItMatters, owner_topic: ownerTopic }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to notify')
+      setNotifiedItems((prev) => new Set([...prev, index]))
+      setAuditLog((prev) => [
+        ...prev,
+        {
+          id: `temp-notify-${Date.now()}`,
+          actor_email: 'system',
+          action: 'info_requested',
+          details: { team: ownerTopic, item, to: data.notified_email },
+          created_at: new Date().toISOString(),
+        },
+      ])
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to send notification')
+    } finally {
+      setNotifyingItem(null)
     }
   }
 
@@ -353,20 +384,46 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
       {answer?.missing_information && answer.missing_information.length > 0 && (
         <section className="card card-pad">
           <p className="eyebrow" style={{ marginBottom: 10 }}>Missing Information ({answer.missing_information.length})</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {answer.missing_information.map((m, i) => {
-              const ownerEmail = routingConfigs[SUGGESTED_OWNER_TOPIC[m.suggested_owner] ?? 'general']
+              const ownerTopic = SUGGESTED_OWNER_TOPIC[m.suggested_owner] ?? 'general'
+              const ownerEmail = routingConfigs[ownerTopic]
+              const isNotified = notifiedItems.has(i)
+              const isNotifying = notifyingItem === i
               return (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                  <span className="badge ink mono" style={{ flexShrink: 0, fontSize: 11 }}>
-                    {SUGGESTED_OWNER_LABEL[m.suggested_owner] ?? m.suggested_owner}
-                  </span>
-                  {ownerEmail && (
-                    <span style={{ fontSize: 11, color: 'var(--muted-2)', fontFamily: 'var(--font-mono)', flexShrink: 0, paddingTop: 2 }}>
-                      → {ownerEmail}
+                <div key={i} style={{
+                  padding: '10px 12px',
+                  background: 'var(--bg)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--r-sm)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                    <span className="badge ink mono" style={{ fontSize: 11, flexShrink: 0 }}>
+                      {SUGGESTED_OWNER_LABEL[m.suggested_owner] ?? m.suggested_owner}
                     </span>
+                    {ownerEmail && (
+                      <span style={{ fontSize: 11, color: 'var(--muted-2)', fontFamily: 'var(--font-mono)' }}>
+                        → {ownerEmail}
+                      </span>
+                    )}
+                    <div style={{ flex: 1 }} />
+                    <button
+                      onClick={() => notifyTeam(i, m.item, m.why_it_matters, ownerTopic)}
+                      disabled={isNotified || isNotifying}
+                      className={`btn ${isNotified ? 'ghost' : 'accent'} sm`}
+                      style={{ fontSize: 11.5, flexShrink: 0 }}
+                    >
+                      {isNotified ? 'Notified ✓' : isNotifying ? 'Sending…' : `Notify ${SUGGESTED_OWNER_LABEL[m.suggested_owner] ?? m.suggested_owner}`}
+                    </button>
+                  </div>
+                  <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5, marginBottom: m.why_it_matters ? 4 : 0 }}>
+                    {m.item}
+                  </p>
+                  {m.why_it_matters && (
+                    <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, fontStyle: 'italic' }}>
+                      {m.why_it_matters}
+                    </p>
                   )}
-                  <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5 }}>{m.item}</p>
                 </div>
               )
             })}
@@ -524,7 +581,8 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
                     {entry.action === 'rejected' && 'rejected this review'}
                     {entry.action === 'commented' && 'left a comment'}
                     {entry.action === 'escalated' && `escalated to ${(entry.details?.to as string) ?? 'backup reviewer'}`}
-                    {!['approved','rejected','commented','escalated'].includes(entry.action) && entry.action}
+                    {entry.action === 'info_requested' && `requested info from ${(entry.details?.team as string) ?? 'team'}`}
+                    {!['approved','rejected','commented','escalated','info_requested'].includes(entry.action) && entry.action}
                   </p>
                   <p style={{ fontSize: 11.5, color: 'var(--muted-2)', marginTop: 2 }}>{relativeTime(entry.created_at)}</p>
                 </div>
