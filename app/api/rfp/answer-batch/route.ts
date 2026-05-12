@@ -7,6 +7,7 @@ import { generateRFPResponse } from '@/lib/generation'
 import { verifyCitations } from '@/lib/citations'
 import { getServiceSupabase } from '@/lib/supabase'
 import { checkRateLimit } from '@/lib/rate-limit'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 const BatchRequestSchema = z.object({
   questions: z
@@ -18,25 +19,76 @@ const BatchRequestSchema = z.object({
       }),
     )
     .min(1)
-    .max(30),
+    .max(50),
 })
 
+type Question = z.infer<typeof BatchRequestSchema>['questions'][number]
+
 const encoder = new TextEncoder()
+const CONCURRENCY = 4
 
 function sseEvent(type: string, payload: unknown): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ type, ...payload as object })}\n\n`)
+}
+
+async function processQuestion(
+  question: Question,
+  controller: ReadableStreamDefaultController,
+  supabase: SupabaseClient,
+) {
+  controller.enqueue(sseEvent('start', { question_id: question.id }))
+  try {
+    const [{ data: queryRecord }, retrievedChunks] = await Promise.all([
+      supabase
+        .from('queries')
+        .insert({ query_text: question.text, rfp_context: { section: question.section } })
+        .select('id')
+        .single(),
+      retrieveChunks(question.text),
+    ])
+
+    const rawResponse = await generateRFPResponse(question.text, retrievedChunks)
+    const retrievedIds = new Set(retrievedChunks.map((c) => c.id))
+    const { response } = verifyCitations(rawResponse, retrievedIds)
+
+    if (queryRecord) {
+      await supabase.from('query_results').insert({
+        query_id: queryRecord.id,
+        answer: response,
+        retrieved_chunk_ids: [...retrievedIds],
+      })
+    }
+
+    controller.enqueue(
+      sseEvent('result', {
+        question_id: question.id,
+        question_text: question.text,
+        section: question.section,
+        response,
+        retrieved_chunks: retrievedChunks,
+      }),
+    )
+  } catch (err) {
+    controller.enqueue(
+      sseEvent('question_error', {
+        question_id: question.id,
+        message: err instanceof Error ? err.message : 'Unknown error',
+      }),
+    )
+  }
 }
 
 export async function POST(request: NextRequest) {
   const limited = await checkRateLimit(request, 'ask')
   if (limited) return limited
 
-  let questions: z.infer<typeof BatchRequestSchema>['questions']
+  let questions: Question[]
   try {
     const body = await request.json()
     const parsed = BatchRequestSchema.safeParse(body)
     if (!parsed.success) {
-      return new Response(JSON.stringify({ error: 'Invalid request' }), { status: 400 })
+      const msg = parsed.error.issues[0]?.message ?? 'Invalid request'
+      return new Response(JSON.stringify({ error: msg }), { status: 400 })
     }
     questions = parsed.data.questions
   } catch {
@@ -47,48 +99,10 @@ export async function POST(request: NextRequest) {
 
   const stream = new ReadableStream({
     async start(controller) {
-      for (const question of questions) {
-        controller.enqueue(sseEvent('start', { question_id: question.id }))
-
-        try {
-          const [{ data: queryRecord }, retrievedChunks] = await Promise.all([
-            supabase
-              .from('queries')
-              .insert({ query_text: question.text, rfp_context: { section: question.section } })
-              .select('id')
-              .single(),
-            retrieveChunks(question.text),
-          ])
-
-          const rawResponse = await generateRFPResponse(question.text, retrievedChunks)
-          const retrievedIds = new Set(retrievedChunks.map((c) => c.id))
-          const { response } = verifyCitations(rawResponse, retrievedIds)
-
-          if (queryRecord) {
-            await supabase.from('query_results').insert({
-              query_id: queryRecord.id,
-              answer: response,
-              retrieved_chunk_ids: [...retrievedIds],
-            })
-          }
-
-          controller.enqueue(
-            sseEvent('result', {
-              question_id: question.id,
-              question_text: question.text,
-              section: question.section,
-              response,
-              retrieved_chunks: retrievedChunks,
-            }),
-          )
-        } catch (err) {
-          controller.enqueue(
-            sseEvent('question_error', {
-              question_id: question.id,
-              message: err instanceof Error ? err.message : 'Unknown error',
-            }),
-          )
-        }
+      // Process in parallel batches to stay within the 60s function timeout
+      for (let i = 0; i < questions.length; i += CONCURRENCY) {
+        const batch = questions.slice(i, i + CONCURRENCY)
+        await Promise.all(batch.map((q) => processQuestion(q, controller, supabase)))
       }
 
       controller.enqueue(sseEvent('done', { total: questions.length }))
