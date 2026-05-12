@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ingestDocument } from '@/lib/documents'
 import { extractText, ALLOWED_EXTENSIONS } from '@/lib/extractors'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 
 export async function POST(request: NextRequest) {
+  const limited = await checkRateLimit(request, 'upload')
+  if (limited) return limited
+
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File | null

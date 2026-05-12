@@ -4,8 +4,12 @@ import { retrieveChunks } from '@/lib/retrieval'
 import { generateRFPResponse } from '@/lib/generation'
 import { verifyCitations } from '@/lib/citations'
 import { AskRequestSchema } from '@/lib/schema'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 export async function POST(request: NextRequest) {
+  const limited = await checkRateLimit(request, 'ask')
+  if (limited) return limited
+
   try {
     const body = await request.json()
     const parsed = AskRequestSchema.safeParse(body)
