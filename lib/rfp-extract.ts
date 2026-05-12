@@ -2,12 +2,30 @@ import * as z from 'zod'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { openai, CHAT_MODEL } from './openai'
 
+export const RFP_TOPICS = [
+  'security_compliance',
+  'legal',
+  'pricing',
+  'technical',
+  'commercial',
+  'implementation',
+  'support',
+  'general',
+] as const
+
+export type RFPTopic = (typeof RFP_TOPICS)[number]
+
+// Topics that are always treated as high-risk regardless of question content
+const HIGH_RISK_TOPICS = new Set<RFPTopic>(['security_compliance', 'legal', 'pricing'])
+
 const ExtractedQuestionsSchema = z.object({
   questions: z.array(
     z.object({
       id: z.number(),
       section: z.string(),
       text: z.string(),
+      topic: z.enum(RFP_TOPICS),
+      risk_level: z.enum(['high', 'medium', 'low']),
     }),
   ),
 })
@@ -16,12 +34,13 @@ export type ExtractedQuestion = {
   id: number
   section: string
   text: string
+  topic: RFPTopic
+  risk_level: 'high' | 'medium' | 'low'
 }
 
 const FORMAT = zodResponseFormat(ExtractedQuestionsSchema, 'rfp_questions')
 
 export async function extractRFPQuestions(documentText: string): Promise<ExtractedQuestion[]> {
-  // Strip null bytes and control characters that OpenAI rejects
   const safeText = documentText.replace(/\0/g, '').replace(/[\x01-\x08\x0B\x0C\x0E-\x1F]/g, ' ')
 
   const completion = await openai.chat.completions.parse({
@@ -31,10 +50,12 @@ export async function extractRFPQuestions(documentText: string): Promise<Extract
         role: 'system',
         content: `You are an RFP document analyzer. Extract all questions, requirements, and evaluation criteria that a vendor must respond to.
 
-For each item:
+For each item provide:
 - id: sequential integer starting at 1
-- section: the section or category it belongs to (e.g. "Technical Requirements", "Security & Compliance", "Implementation")
+- section: the section or category it belongs to (e.g. "Technical Requirements", "Security & Compliance")
 - text: the complete, self-contained question or requirement
+- topic: classify into one of: security_compliance, legal, pricing, technical, commercial, implementation, support, general
+- risk_level: high (involves legal, contractual, financial, or security commitments), medium (operational or product claims), low (factual or general)
 
 Skip preamble, instructions to bidders, cover pages, and any content that is not a vendor requirement.`,
       },
@@ -50,5 +71,9 @@ Skip preamble, instructions to bidders, cover pages, and any content that is not
   const parsed = completion.choices[0]?.message?.parsed
   if (!parsed) throw new Error('Failed to extract questions from document')
 
-  return parsed.questions
+  // Enforce high risk for sensitive topics
+  return parsed.questions.map((q) => ({
+    ...q,
+    risk_level: HIGH_RISK_TOPICS.has(q.topic) ? 'high' : q.risk_level,
+  }))
 }

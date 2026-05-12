@@ -1,6 +1,7 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useMemo } from 'react'
+import Link from 'next/link'
 import { ConfidenceBadge } from './ConfidenceBadge'
 import { ErrorAlert } from './ErrorAlert'
 import type { ExtractedQuestion } from '@/lib/rfp-extract'
@@ -32,6 +33,17 @@ export function RFPProcessor() {
   const [progress, setProgress] = useState({ done: 0, total: 0 })
 
   const [exporting, setExporting] = useState(false)
+
+  const routedCount = useMemo(() => {
+    let count = 0
+    for (const [qId, a] of answers.entries()) {
+      const q = questions.find((x) => x.id === qId)
+      const isLowConf = a.response.confidence.level === 'low'
+      const isHighRisk = (q as ExtractedQuestion & { risk_level?: string })?.risk_level === 'high'
+      if (isLowConf || isHighRisk) count++
+    }
+    return count
+  }, [answers, questions])
 
   // ── Step 1: Upload & extract ──────────────────────────────────────────────
 
@@ -300,13 +312,23 @@ export function RFPProcessor() {
               </div>
             )}
             {step === 'done' && (
-              <button
-                onClick={handleExportAll}
-                disabled={exporting}
-                className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
-              >
-                {exporting ? 'Exporting…' : '⬇ Export all as Word'}
-              </button>
+              <div className="flex items-center gap-3 flex-wrap">
+                {routedCount > 0 && (
+                  <Link
+                    href="/review"
+                    className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg hover:bg-amber-100 transition-colors"
+                  >
+                    {routedCount} answer{routedCount !== 1 ? 's' : ''} sent for review →
+                  </Link>
+                )}
+                <button
+                  onClick={handleExportAll}
+                  disabled={exporting}
+                  className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
+                >
+                  {exporting ? 'Exporting…' : '⬇ Export all as Word'}
+                </button>
+              </div>
             )}
           </div>
 

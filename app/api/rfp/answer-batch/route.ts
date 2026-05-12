@@ -7,7 +7,9 @@ import { generateRFPResponse } from '@/lib/generation'
 import { verifyCitations } from '@/lib/citations'
 import { getServiceSupabase } from '@/lib/supabase'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { routeAnswersForReview } from '@/lib/review-routing'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { RFPResponse } from '@/lib/schema'
 
 const BatchRequestSchema = z.object({
   rfp_title: z.string().optional(),
@@ -17,6 +19,8 @@ const BatchRequestSchema = z.object({
         id: z.number(),
         section: z.string(),
         text: z.string(),
+        topic: z.string().optional(),
+        risk_level: z.string().optional(),
       }),
     )
     .min(1)
@@ -28,6 +32,15 @@ type Question = z.infer<typeof BatchRequestSchema>['questions'][number]
 const encoder = new TextEncoder()
 const CONCURRENCY = 5
 
+type CompletedAnswer = {
+  queryId: string
+  questionText: string
+  section: string
+  topic: string
+  riskLevel: string
+  response: RFPResponse
+}
+
 function sseEvent(type: string, payload: unknown): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ type, ...payload as object })}\n\n`)
 }
@@ -38,6 +51,7 @@ async function processQuestion(
   supabase: SupabaseClient,
   rfpRunId: string,
   rfpTitle: string | undefined,
+  completed: CompletedAnswer[],
 ) {
   controller.enqueue(sseEvent('start', { question_id: question.id }))
   try {
@@ -46,7 +60,13 @@ async function processQuestion(
         .from('queries')
         .insert({
           query_text: question.text,
-          rfp_context: { section: question.section, rfp_run_id: rfpRunId, rfp_title: rfpTitle },
+          rfp_context: {
+            section: question.section,
+            rfp_run_id: rfpRunId,
+            rfp_title: rfpTitle,
+            topic: question.topic ?? 'general',
+            risk_level: question.risk_level ?? 'low',
+          },
         })
         .select('id')
         .single(),
@@ -62,6 +82,15 @@ async function processQuestion(
         query_id: queryRecord.id,
         answer: response,
         retrieved_chunk_ids: [...retrievedIds],
+      })
+
+      completed.push({
+        queryId: queryRecord.id,
+        questionText: question.text,
+        section: question.section,
+        topic: question.topic ?? 'general',
+        riskLevel: question.risk_level ?? 'low',
+        response,
       })
     }
 
@@ -105,17 +134,24 @@ export async function POST(request: NextRequest) {
 
   const rfpRunId = crypto.randomUUID()
   const supabase = getServiceSupabase()
+  const completed: CompletedAnswer[] = []
 
   const stream = new ReadableStream({
     async start(controller) {
-      // Process in parallel batches to stay within the 60s function timeout
       for (let i = 0; i < questions.length; i += CONCURRENCY) {
         const batch = questions.slice(i, i + CONCURRENCY)
-        await Promise.all(batch.map((q) => processQuestion(q, controller, supabase, rfpRunId, rfpTitle)))
+        await Promise.all(
+          batch.map((q) => processQuestion(q, controller, supabase, rfpRunId, rfpTitle, completed)),
+        )
       }
 
       controller.enqueue(sseEvent('done', { total: questions.length }))
       controller.close()
+
+      // Fire-and-forget: route low-confidence answers after SSE closes
+      routeAnswersForReview(completed, rfpRunId, rfpTitle ?? 'RFP').catch((err) =>
+        console.error('[answer-batch] routing error:', err),
+      )
     },
   })
 
