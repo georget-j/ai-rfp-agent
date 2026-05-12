@@ -5,7 +5,7 @@ import { extractText, ALLOWED_EXTENSIONS } from '@/lib/extractors'
 import { extractRFPQuestions } from '@/lib/rfp-extract'
 import { checkRateLimit } from '@/lib/rate-limit'
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024
+const MAX_FILE_SIZE = 4 * 1024 * 1024
 
 export async function POST(request: NextRequest) {
   const limited = await checkRateLimit(request, 'upload')

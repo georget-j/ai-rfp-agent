@@ -39,6 +39,12 @@ export function RFPProcessor() {
     const file = e.target.files?.[0]
     if (!file) return
 
+    if (file.size > 4 * 1024 * 1024) {
+      setError('File too large — maximum upload size is 4 MB. Try compressing the PDF or saving as plain text.')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
     setError(null)
     setExtracting(true)
     setRfpTitle(file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '))
@@ -239,7 +245,7 @@ export function RFPProcessor() {
               <p className="text-sm font-medium text-gray-700 mb-1">
                 Upload your RFP document
               </p>
-              <p className="text-xs text-gray-400">PDF, DOCX, TXT, HTML — up to 10 MB</p>
+              <p className="text-xs text-gray-400">PDF, DOCX, TXT, HTML — up to 4 MB</p>
             </>
           )}
         </div>
