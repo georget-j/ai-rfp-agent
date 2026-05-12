@@ -99,6 +99,7 @@ export function RoutingConfigTable() {
           <tr>
             <th>Topic</th>
             <th>Owner email</th>
+            <th>Backup email</th>
             <th>Channel</th>
             <th>Escalation</th>
             <th style={{ width: 60 }} />
@@ -114,6 +115,15 @@ export function RoutingConfigTable() {
                     value={editState.owner_email ?? ''}
                     onChange={(e) => setEditState((s) => ({ ...s, owner_email: e.target.value }))}
                     placeholder="owner@company.com"
+                    className="input"
+                    style={{ padding: '4px 8px', fontSize: 12.5 }}
+                  />
+                </td>
+                <td>
+                  <input
+                    value={editState.backup_email ?? ''}
+                    onChange={(e) => setEditState((s) => ({ ...s, backup_email: e.target.value }))}
+                    placeholder="backup@company.com"
                     className="input"
                     style={{ padding: '4px 8px', fontSize: 12.5 }}
                   />
@@ -156,6 +166,9 @@ export function RoutingConfigTable() {
                 <td style={{ fontWeight: 500, color: 'var(--ink)' }}>{TOPIC_LABEL[cfg.topic] ?? cfg.topic}</td>
                 <td style={{ color: 'var(--muted)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
                   {cfg.owner_email || <em style={{ opacity: 0.5 }}>unset</em>}
+                </td>
+                <td style={{ color: 'var(--muted-2)', fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>
+                  {cfg.backup_email || <em style={{ opacity: 0.4 }}>—</em>}
                 </td>
                 <td>
                   <span className={`badge ${CHANNEL_BADGE[cfg.preferred_channel] ?? ''} mono`}>

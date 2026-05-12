@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
+import { escalateOverdueReviews } from '@/lib/review-routing'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,6 +17,10 @@ export async function GET() {
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  void escalateOverdueReviews().catch((err) =>
+    console.warn('[queue] escalation error:', err),
+  )
 
   return NextResponse.json(data ?? [])
 }

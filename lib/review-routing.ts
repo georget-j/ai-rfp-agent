@@ -3,6 +3,7 @@ import { computeConfidenceScore, shouldRoute } from './confidence-score'
 import { getRoutingConfig, createReviewRequest } from './routing'
 import { dispatchReviewNotification } from './notifications'
 import { getServiceSupabase } from './supabase'
+import { logReviewAction } from './audit'
 
 type AnsweredItem = {
   queryId: string
@@ -11,6 +12,58 @@ type AnsweredItem = {
   topic: string
   riskLevel: string
   response: RFPResponse
+}
+
+export async function escalateOverdueReviews(): Promise<void> {
+  const supabase = getServiceSupabase()
+
+  const { data: overdue } = await supabase
+    .from('review_requests')
+    .select('id, topic, assigned_to, query_id, rfp_run_id, risk_level, confidence_score, status, due_at, notified_at, created_at, updated_at')
+    .in('status', ['pending', 'assigned'])
+    .lt('due_at', new Date().toISOString())
+    .is('backup_notified_at', null)
+
+  if (!overdue?.length) return
+
+  for (const row of overdue) {
+    const config = await getRoutingConfig(row.topic)
+    if (!config?.backup_email) continue
+
+    const { data: queryData } = await supabase
+      .from('queries')
+      .select('query_text, rfp_context, query_results(answer)')
+      .eq('id', row.query_id)
+      .single()
+
+    if (!queryData) continue
+
+    const answer = (queryData.query_results as Array<{ answer: Record<string, unknown> }>)?.[0]?.answer
+    const questionText = queryData.query_text
+    const executiveSummary = (answer?.executive_summary as string) ?? ''
+    const rfpTitle = (queryData.rfp_context as Record<string, unknown> | null)?.rfp_title as string ?? 'Untitled RFP'
+
+    await supabase.from('review_requests').update({
+      status: 'escalated',
+      backup_notified_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq('id', row.id)
+
+    const escalatedRow = { ...row, assigned_to: config.backup_email }
+
+    dispatchReviewNotification({
+      reviewRequest: escalatedRow,
+      routingConfig: config,
+      questionText,
+      executiveSummary,
+      rfpTitle,
+    }).catch((err) => console.error('[escalation] dispatch error:', err))
+
+    await logReviewAction(row.id, 'system', 'escalated', {
+      from: row.assigned_to,
+      to: config.backup_email,
+    })
+  }
 }
 
 export async function routeAnswersForReview(

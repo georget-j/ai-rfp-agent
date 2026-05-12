@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import * as z from 'zod'
 import { getServiceSupabase } from '@/lib/supabase'
 import { ingestDocument } from '@/lib/documents'
+import { logReviewAction } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -63,6 +64,8 @@ export async function POST(
       .update({ status: 'rejected', updated_at: new Date().toISOString() })
       .eq('id', id)
 
+    void logReviewAction(id, reviewRequest.assigned_to, 'rejected')
+
     return NextResponse.json({ success: true, action: 'rejected' })
   }
 
@@ -89,7 +92,7 @@ export async function POST(
     query_id: reviewRequest.query_id,
     original_question: queryData.query_text,
     approved_answer: approvedText,
-    approved_by: 'demo',
+    approved_by: reviewRequest.assigned_to,
     topic: reviewRequest.topic,
     source_rfp: (queryData.rfp_context as Record<string, unknown> | null)?.rfp_title as string ?? null,
     ingested_as_document_id: ingestedDocumentId,
@@ -100,6 +103,11 @@ export async function POST(
     .from('review_requests')
     .update({ status: 'approved', updated_at: new Date().toISOString() })
     .eq('id', id)
+
+  void logReviewAction(id, reviewRequest.assigned_to, 'approved', {
+    edited: !!editedAnswer?.trim(),
+    ingested: !!ingestedDocumentId,
+  })
 
   return NextResponse.json({ success: true, action: 'approved', ingested: !!ingestedDocumentId })
 }

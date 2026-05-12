@@ -1,8 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { cn } from '@/lib/utils'
 import type { RFPResponse } from '@/lib/schema'
 
 type ReviewRequest = {
@@ -13,11 +12,27 @@ type ReviewRequest = {
   assigned_to: string
   status: string
   due_at: string | null
+  audit_log?: AuditEntry[]
   queries: {
     query_text: string
     rfp_context: Record<string, unknown> | null
     query_results: Array<{ answer: RFPResponse }> | null
   } | null
+}
+
+type Comment = {
+  id: string
+  author_email: string
+  body: string
+  created_at: string
+}
+
+type AuditEntry = {
+  id: string
+  actor_email: string
+  action: string
+  details: Record<string, unknown> | null
+  created_at: string
 }
 
 const TOPIC_LABEL: Record<string, string> = {
@@ -31,6 +46,40 @@ const TOPIC_LABEL: Record<string, string> = {
   general: 'General',
 }
 
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  if (diff < 60_000) return 'just now'
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
+  return `${Math.floor(diff / 86_400_000)}d ago`
+}
+
+function initials(email: string): string {
+  const parts = email.split('@')[0].split(/[._-]/)
+  return parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('')
+}
+
+const AUDIT_ICON: Record<string, string> = {
+  approved: '✓',
+  rejected: '✕',
+  commented: '◎',
+  escalated: '↑',
+  assigned: '→',
+}
+
+function riskBadgeVariant(risk: string) {
+  if (risk === 'high') return 'danger'
+  if (risk === 'medium') return 'warn'
+  return 'success'
+}
+
+function confColor(score: number | null): string {
+  if (score === null) return 'var(--muted)'
+  if (score >= 0.75) return 'var(--success)'
+  if (score >= 0.60) return 'var(--warn)'
+  return 'var(--danger)'
+}
+
 export function ReviewCard({ review }: { review: ReviewRequest }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
@@ -39,10 +88,34 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
   const [done, setDone] = useState<'approved' | 'rejected' | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
+  // Comments
+  const [comments, setComments] = useState<Comment[]>([])
+  const [commentEmail, setCommentEmail] = useState('')
+  const [commentBody, setCommentBody] = useState('')
+  const [postingComment, setPostingComment] = useState(false)
+  const [commentErr, setCommentErr] = useState<string | null>(null)
+
+  // Audit log (from prop or loaded separately)
+  const [auditLog, setAuditLog] = useState<AuditEntry[]>(review.audit_log ?? [])
+
   const answer = review.queries?.query_results?.[0]?.answer
   const questionText = review.queries?.query_text ?? ''
   const rfpTitle = (review.queries?.rfp_context?.rfp_title as string) ?? 'Untitled RFP'
   const draftAnswer = answer?.draft_answer ?? ''
+
+  useEffect(() => {
+    fetch(`/api/review/${review.id}/comments`)
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setComments(data) })
+      .catch(() => null)
+
+    if (!review.audit_log) {
+      fetch(`/api/review/${review.id}`)
+        .then((r) => r.json())
+        .then((data) => { if (Array.isArray(data.audit_log)) setAuditLog(data.audit_log) })
+        .catch(() => null)
+    }
+  }, [review.id, review.audit_log])
 
   async function submit(action: 'approve' | 'reject') {
     setSubmitting(true)
@@ -66,21 +139,52 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
     }
   }
 
+  async function postComment() {
+    if (!commentEmail.trim() || !commentBody.trim()) return
+    setPostingComment(true)
+    setCommentErr(null)
+    const optimistic: Comment = {
+      id: `temp-${Date.now()}`,
+      author_email: commentEmail.trim(),
+      body: commentBody.trim(),
+      created_at: new Date().toISOString(),
+    }
+    setComments((prev) => [...prev, optimistic])
+    setCommentBody('')
+    try {
+      const res = await fetch(`/api/review/${review.id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ author_email: commentEmail.trim(), body: optimistic.body }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to post')
+      setComments((prev) => prev.map((c) => (c.id === optimistic.id ? data : c)))
+      setAuditLog((prev) => [
+        ...prev,
+        { id: data.id, actor_email: commentEmail.trim(), action: 'commented', details: null, created_at: data.created_at },
+      ])
+    } catch (e) {
+      setComments((prev) => prev.filter((c) => c.id !== optimistic.id))
+      setCommentBody(optimistic.body)
+      setCommentErr(e instanceof Error ? e.message : 'Failed to post comment')
+    } finally {
+      setPostingComment(false)
+    }
+  }
+
   if (done) {
     return (
-      <div className="border border-gray-200 rounded-xl p-8 text-center">
-        <p className="text-lg font-semibold text-gray-900 mb-1">
+      <div className="card card-pad" style={{ textAlign: 'center', padding: '48px 32px' }}>
+        <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink)', marginBottom: 6 }}>
           {done === 'approved' ? 'Answer approved' : 'Answer rejected'}
         </p>
-        <p className="text-sm text-gray-500 mb-6">
+        <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.5 }}>
           {done === 'approved'
             ? 'The approved answer has been saved and added to the knowledge base.'
             : 'The answer has been marked as rejected.'}
         </p>
-        <button
-          onClick={() => router.push('/review')}
-          className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-        >
+        <button onClick={() => router.push('/review')} className="btn ghost sm">
           ← Back to queue
         </button>
       </div>
@@ -89,14 +193,11 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
 
   if (review.status === 'approved' || review.status === 'rejected') {
     return (
-      <div className="border border-gray-200 rounded-xl p-6 text-center">
-        <p className="text-sm text-gray-500">
+      <div className="card card-pad" style={{ textAlign: 'center', padding: '40px 24px' }}>
+        <p style={{ fontSize: 13, color: 'var(--muted)' }}>
           This review has already been <strong>{review.status}</strong>.
         </p>
-        <button
-          onClick={() => router.push('/review')}
-          className="mt-4 text-sm text-blue-600 hover:text-blue-800 font-medium"
-        >
+        <button onClick={() => router.push('/review')} className="btn ghost sm" style={{ marginTop: 16 }}>
           ← Back to queue
         </button>
       </div>
@@ -104,37 +205,26 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Header */}
-      <div className="border-l-4 border-blue-500 pl-4 py-1">
-        <p className="text-xs text-gray-400 mb-0.5">{rfpTitle}</p>
-        <h2 className="text-base font-semibold text-gray-900">{questionText}</h2>
-        <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-          <span className="text-xs text-gray-500">{TOPIC_LABEL[review.topic] ?? review.topic}</span>
-          <span
-            className={cn(
-              'text-xs px-1.5 py-0.5 rounded border',
-              review.risk_level === 'high'
-                ? 'bg-red-50 text-red-700 border-red-200'
-                : review.risk_level === 'medium'
-                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                : 'bg-green-50 text-green-700 border-green-200',
-            )}
-          >
+      <div className="card card-pad" style={{ borderLeft: '3px solid var(--accent)', borderRadius: 'var(--r-md)' }}>
+        <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>{rfpTitle}</p>
+        <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink)', marginBottom: 10, lineHeight: 1.4 }}>
+          {questionText}
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{TOPIC_LABEL[review.topic] ?? review.topic}</span>
+          <span className={`badge ${riskBadgeVariant(review.risk_level)} mono`}>
             {review.risk_level} risk
           </span>
           {review.confidence_score !== null && (
-            <span
-              className={cn(
-                'text-xs font-medium',
-                review.confidence_score >= 0.75
-                  ? 'text-green-600'
-                  : review.confidence_score >= 0.60
-                  ? 'text-amber-600'
-                  : 'text-red-600',
-              )}
-            >
+            <span style={{ fontSize: 12, fontWeight: 500, color: confColor(review.confidence_score) }}>
               {Math.round(review.confidence_score * 100)}% confidence
+            </span>
+          )}
+          {review.assigned_to && (
+            <span style={{ fontSize: 11.5, color: 'var(--muted-2)', fontFamily: 'var(--font-mono)' }}>
+              Assigned to {review.assigned_to}
             </span>
           )}
         </div>
@@ -142,28 +232,34 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
 
       {/* Executive summary */}
       {answer?.executive_summary && (
-        <section>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-            Executive Summary
-          </p>
-          <p className="text-sm text-gray-800 leading-relaxed">{answer.executive_summary}</p>
+        <section className="card card-pad">
+          <p className="eyebrow" style={{ marginBottom: 8 }}>Executive Summary</p>
+          <p style={{ fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.6 }}>{answer.executive_summary}</p>
         </section>
       )}
 
       {/* Draft answer */}
-      <section>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-          AI Draft Answer
-        </p>
+      <section className="card card-pad">
+        <p className="eyebrow" style={{ marginBottom: 8 }}>AI Draft Answer</p>
         {editing ? (
           <textarea
             value={editedAnswer}
             onChange={(e) => setEditedAnswer(e.target.value)}
             rows={10}
-            className="w-full border border-gray-300 rounded-lg p-3 text-sm text-gray-800 font-mono resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="textarea"
+            style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}
           />
         ) : (
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+          <div style={{
+            background: 'var(--bg)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--r-sm)',
+            padding: '14px 16px',
+            fontSize: 13.5,
+            color: 'var(--ink-2)',
+            whiteSpace: 'pre-wrap',
+            lineHeight: 1.6,
+          }}>
             {draftAnswer}
           </div>
         )}
@@ -171,15 +267,15 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
 
       {/* Citations */}
       {answer?.citations && answer.citations.length > 0 && (
-        <section>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-            Citations ({answer.citations.length})
-          </p>
-          <div className="space-y-2">
+        <section className="card card-pad">
+          <p className="eyebrow" style={{ marginBottom: 10 }}>Citations ({answer.citations.length})</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {answer.citations.map((c, i) => (
-              <div key={i} className="border-l-2 border-gray-300 pl-3">
-                <p className="text-xs font-medium text-gray-700">{c.source_title}</p>
-                <p className="text-xs text-gray-500 italic mt-0.5 line-clamp-2">{c.excerpt}</p>
+              <div key={i} className="cite">
+                <p style={{ fontWeight: 500, fontSize: 12.5, color: 'var(--ink-2)', marginBottom: 3 }}>{c.source_title}</p>
+                <p style={{ fontSize: 12, color: 'var(--muted)', fontStyle: 'italic', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  {c.excerpt}
+                </p>
               </div>
             ))}
           </div>
@@ -188,80 +284,178 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
 
       {/* Missing info */}
       {answer?.missing_information && answer.missing_information.length > 0 && (
-        <section>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-            Missing Information ({answer.missing_information.length})
-          </p>
-          <div className="space-y-1.5">
+        <section className="card card-pad">
+          <p className="eyebrow" style={{ marginBottom: 10 }}>Missing Information ({answer.missing_information.length})</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {answer.missing_information.map((m, i) => (
-              <div key={i} className="flex items-start gap-2">
-                <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 shrink-0">
-                  {m.suggested_owner}
-                </span>
-                <p className="text-xs text-gray-700">{m.item}</p>
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <span className="badge ink mono" style={{ flexShrink: 0, fontSize: 11 }}>{m.suggested_owner}</span>
+                <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5 }}>{m.item}</p>
               </div>
             ))}
           </div>
         </section>
       )}
 
-      {/* Confidence */}
+      {/* Confidence reasoning */}
       {answer?.confidence && (
-        <section>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-            Confidence
-          </p>
-          <p className="text-sm text-gray-600">{answer.confidence.reason}</p>
+        <section className="card card-pad">
+          <p className="eyebrow" style={{ marginBottom: 6 }}>Confidence</p>
+          <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>{answer.confidence.reason}</p>
         </section>
       )}
 
-      {err && <p className="text-sm text-red-600">{err}</p>}
+      {err && (
+        <p style={{ fontSize: 13, color: 'var(--danger)', padding: '10px 14px', background: 'color-mix(in oklch, var(--danger) 8%, var(--surface))', borderRadius: 'var(--r-sm)' }}>
+          {err}
+        </p>
+      )}
 
       {/* Actions */}
-      <div className="flex items-center gap-3 pt-2 border-t border-gray-200">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4 }}>
         {editing ? (
           <>
-            <button
-              onClick={() => submit('approve')}
-              disabled={submitting}
-              className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-            >
+            <button onClick={() => submit('approve')} disabled={submitting} className="btn accent">
               {submitting ? 'Saving…' : 'Save & Approve'}
             </button>
-            <button
-              onClick={() => { setEditing(false); setEditedAnswer('') }}
-              disabled={submitting}
-              className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors"
-            >
+            <button onClick={() => { setEditing(false); setEditedAnswer('') }} disabled={submitting} className="btn ghost">
               Cancel
             </button>
           </>
         ) : (
           <>
-            <button
-              onClick={() => submit('approve')}
-              disabled={submitting}
-              className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-            >
+            <button onClick={() => submit('approve')} disabled={submitting} className="btn accent">
               {submitting ? 'Saving…' : 'Approve'}
             </button>
             <button
               onClick={() => { setEditing(true); setEditedAnswer(draftAnswer) }}
               disabled={submitting}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="btn"
             >
               Edit & Approve
             </button>
-            <button
-              onClick={() => submit('reject')}
-              disabled={submitting}
-              className="px-4 py-2 bg-red-50 text-red-700 text-sm font-medium rounded-lg hover:bg-red-100 border border-red-200 disabled:opacity-50 transition-colors"
-            >
+            <button onClick={() => submit('reject')} disabled={submitting} className="btn danger">
               {submitting ? '…' : 'Reject'}
             </button>
           </>
         )}
       </div>
+
+      {/* Discussion thread */}
+      <section className="card card-pad">
+        <p className="eyebrow" style={{ marginBottom: 14 }}>
+          Discussion {comments.length > 0 && `(${comments.length})`}
+        </p>
+
+        {comments.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 18 }}>
+            {comments.map((c) => (
+              <div key={c.id} style={{ display: 'flex', gap: 10 }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                  background: 'var(--accent-tint)', color: 'var(--accent)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-sans)',
+                }}>
+                  {initials(c.author_email)}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ink)', fontFamily: 'var(--font-mono)' }}>
+                      {c.author_email}
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--muted-2)' }}>{relativeTime(c.created_at)}</span>
+                  </div>
+                  <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5 }}>{c.body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <input
+            type="email"
+            value={commentEmail}
+            onChange={(e) => setCommentEmail(e.target.value)}
+            placeholder="your@email.com"
+            className="input"
+            style={{ fontSize: 13 }}
+          />
+          <textarea
+            value={commentBody}
+            onChange={(e) => setCommentBody(e.target.value)}
+            placeholder="Add a comment…"
+            rows={3}
+            className="textarea"
+            style={{ fontSize: 13, resize: 'vertical' }}
+          />
+          {commentErr && (
+            <p style={{ fontSize: 12, color: 'var(--danger)' }}>{commentErr}</p>
+          )}
+          <div>
+            <button
+              onClick={postComment}
+              disabled={postingComment || !commentEmail.trim() || !commentBody.trim()}
+              className="btn sm"
+            >
+              {postingComment ? 'Posting…' : 'Add comment'}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Audit trail */}
+      {auditLog.length > 0 && (
+        <section className="card card-pad">
+          <p className="eyebrow" style={{ marginBottom: 14 }}>Activity</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {auditLog.map((entry, i) => (
+              <div key={entry.id} style={{ display: 'flex', gap: 12, paddingBottom: i < auditLog.length - 1 ? 14 : 0 }}>
+                {/* Timeline line */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%',
+                    background: entry.action === 'approved'
+                      ? 'var(--success-tint)'
+                      : entry.action === 'rejected'
+                      ? 'color-mix(in oklch, var(--danger) 10%, var(--surface))'
+                      : entry.action === 'escalated'
+                      ? 'var(--warn-tint)'
+                      : 'var(--bg-tint)',
+                    color: entry.action === 'approved'
+                      ? 'var(--success)'
+                      : entry.action === 'rejected'
+                      ? 'var(--danger)'
+                      : entry.action === 'escalated'
+                      ? 'var(--warn)'
+                      : 'var(--muted)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 12, fontWeight: 600,
+                    border: '1px solid var(--border)',
+                  }}>
+                    {AUDIT_ICON[entry.action] ?? '·'}
+                  </div>
+                  {i < auditLog.length - 1 && (
+                    <div style={{ width: 1, flex: 1, background: 'var(--border)', minHeight: 12, marginTop: 3 }} />
+                  )}
+                </div>
+                <div style={{ flex: 1, paddingTop: 4 }}>
+                  <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.4 }}>
+                    <span style={{ fontWeight: 500, color: 'var(--ink)' }}>{entry.actor_email}</span>
+                    {' '}{entry.action === 'approved' && 'approved this review'}
+                    {entry.action === 'rejected' && 'rejected this review'}
+                    {entry.action === 'commented' && 'left a comment'}
+                    {entry.action === 'escalated' && `escalated to ${(entry.details?.to as string) ?? 'backup reviewer'}`}
+                    {!['approved','rejected','commented','escalated'].includes(entry.action) && entry.action}
+                  </p>
+                  <p style={{ fontSize: 11.5, color: 'var(--muted-2)', marginTop: 2 }}>{relativeTime(entry.created_at)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
