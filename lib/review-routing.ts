@@ -70,7 +70,8 @@ export async function routeAnswersForReview(
   items: AnsweredItem[],
   rfpRunId: string | undefined,
   rfpTitle: string,
-): Promise<void> {
+): Promise<number> {
+  let routed = 0
   for (const item of items) {
     const score = computeConfidenceScore(item.response)
     if (!shouldRoute(score, item.riskLevel)) continue
@@ -89,6 +90,8 @@ export async function routeAnswersForReview(
     })
     if (!reviewRequest) continue
 
+    routed++
+
     // Update notified_at after dispatch
     dispatchReviewNotification({
       reviewRequest,
@@ -106,4 +109,5 @@ export async function routeAnswersForReview(
       })
       .catch((err) => console.error('[review-routing] dispatch error:', err))
   }
+  return routed
 }

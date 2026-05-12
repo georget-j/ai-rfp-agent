@@ -145,14 +145,13 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      controller.enqueue(sseEvent('done', { total: questions.length }))
-
-      // Await routing before closing — on Vercel the Lambda may terminate as soon
-      // as the stream closes, so routing must complete while the stream is still open.
-      await routeAnswersForReview(completed, rfpRunId, rfpTitle ?? 'RFP').catch((err) =>
-        console.error('[answer-batch] routing error:', err),
+      // Route first so the done event carries the accurate server-side count.
+      // The stream stays open during routing (~1-3s); maxDuration=60 gives headroom.
+      const routed = await routeAnswersForReview(completed, rfpRunId, rfpTitle ?? 'RFP').catch(
+        (err) => { console.error('[answer-batch] routing error:', err); return 0 },
       )
 
+      controller.enqueue(sseEvent('done', { total: questions.length, routed }))
       controller.close()
     },
   })

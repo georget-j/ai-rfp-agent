@@ -7,6 +7,7 @@ export const RFP_TOPICS = [
   'legal',
   'pricing',
   'technical',
+  'engineering',
   'commercial',
   'implementation',
   'support',
@@ -54,7 +55,8 @@ For each item provide:
 - id: sequential integer starting at 1
 - section: the section or category it belongs to (e.g. "Technical Requirements", "Security & Compliance")
 - text: the complete, self-contained question or requirement
-- topic: classify into one of: security_compliance, legal, pricing, technical, commercial, implementation, support, general
+- topic: classify into one of: security_compliance, legal, pricing, technical, engineering, commercial, implementation, support, general
+  (use engineering for software build, API, integration, and architecture requirements)
 - risk_level: high (involves legal, contractual, financial, or security commitments), medium (operational or product claims), low (factual or general)
 
 Skip preamble, instructions to bidders, cover pages, and any content that is not a vendor requirement.`,

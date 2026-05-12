@@ -40,6 +40,7 @@ const TOPIC_LABEL: Record<string, string> = {
   legal: 'Legal',
   pricing: 'Pricing',
   technical: 'Technical',
+  engineering: 'Engineering',
   commercial: 'Commercial',
   implementation: 'Implementation',
   support: 'Support',
@@ -60,7 +61,7 @@ const SUGGESTED_OWNER_LABEL: Record<string, string> = {
 
 const SUGGESTED_OWNER_TOPIC: Record<string, string> = {
   product: 'general',
-  engineering: 'technical',
+  engineering: 'engineering',
   commercial: 'commercial',
   legal: 'legal',
   customer: 'support',

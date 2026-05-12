@@ -17,6 +17,7 @@ const TOPIC_LABEL: Record<string, string> = {
   legal: 'Legal',
   pricing: 'Pricing',
   technical: 'Technical',
+  engineering: 'Engineering',
   commercial: 'Commercial',
   implementation: 'Implementation',
   support: 'Support',

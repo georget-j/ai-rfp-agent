@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useMemo } from 'react'
+import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { ConfidenceBadge } from './ConfidenceBadge'
 import { ErrorAlert } from './ErrorAlert'
@@ -33,17 +33,7 @@ export function RFPProcessor() {
   const [progress, setProgress] = useState({ done: 0, total: 0 })
 
   const [exporting, setExporting] = useState(false)
-
-  const routedCount = useMemo(() => {
-    let count = 0
-    for (const [qId, a] of answers.entries()) {
-      const q = questions.find((x) => x.id === qId)
-      const isLowConf = a.response.confidence.level === 'low'
-      const isHighRisk = (q as ExtractedQuestion & { risk_level?: string })?.risk_level === 'high'
-      if (isLowConf || isHighRisk) count++
-    }
-    return count
-  }, [answers, questions])
+  const [routedCount, setRoutedCount] = useState(0)
 
   // ── Step 1: Upload & extract ──────────────────────────────────────────────
 
@@ -168,6 +158,7 @@ export function RFPProcessor() {
             })
             setProgress((prev) => ({ ...prev, done: prev.done + 1 }))
           } else if (event.type === 'done') {
+            setRoutedCount(event.routed ?? 0)
             setStep('done')
           }
         }
@@ -312,25 +303,39 @@ export function RFPProcessor() {
               </div>
             )}
             {step === 'done' && (
-              <div className="flex items-center gap-3 flex-wrap">
-                {routedCount > 0 && (
-                  <Link
-                    href="/review"
-                    className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg hover:bg-amber-100 transition-colors"
-                  >
-                    {routedCount} answer{routedCount !== 1 ? 's' : ''} sent for review →
-                  </Link>
-                )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <button
                   onClick={handleExportAll}
                   disabled={exporting}
-                  className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
+                  className="btn sm"
+                  style={{ background: 'var(--ink)', color: 'var(--surface)' }}
                 >
                   {exporting ? 'Exporting…' : '⬇ Export all as Word'}
                 </button>
               </div>
             )}
           </div>
+
+          {/* Review routing banner */}
+          {step === 'done' && routedCount > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              padding: '12px 16px',
+              background: 'var(--accent-tint)',
+              border: '1px solid color-mix(in oklch, var(--accent) 20%, transparent)',
+              borderRadius: 'var(--r-sm)',
+            }}>
+              <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--accent)' }}>
+                {routedCount} answer{routedCount !== 1 ? 's' : ''} sent for human review
+              </p>
+              <Link href="/review" className="btn accent sm">
+                View review queue →
+              </Link>
+            </div>
+          )}
 
           {/* Question groups by section */}
           <div className="space-y-4">
