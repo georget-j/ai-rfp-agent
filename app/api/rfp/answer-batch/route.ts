@@ -1,3 +1,5 @@
+export const maxDuration = 60
+
 import { NextRequest } from 'next/server'
 import * as z from 'zod'
 import { retrieveChunks } from '@/lib/retrieval'

@@ -1,3 +1,5 @@
+export const maxDuration = 60
+
 import { NextRequest, NextResponse } from 'next/server'
 import { extractText, ALLOWED_EXTENSIONS } from '@/lib/extractors'
 import { extractRFPQuestions } from '@/lib/rfp-extract'

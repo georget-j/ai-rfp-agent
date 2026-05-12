@@ -21,6 +21,9 @@ export type ExtractedQuestion = {
 const FORMAT = zodResponseFormat(ExtractedQuestionsSchema, 'rfp_questions')
 
 export async function extractRFPQuestions(documentText: string): Promise<ExtractedQuestion[]> {
+  // Strip null bytes and control characters that OpenAI rejects
+  const safeText = documentText.replace(/\0/g, '').replace(/[\x01-\x08\x0B\x0C\x0E-\x1F]/g, ' ')
+
   const completion = await openai.chat.completions.parse({
     model: CHAT_MODEL,
     messages: [
@@ -37,7 +40,7 @@ Skip preamble, instructions to bidders, cover pages, and any content that is not
       },
       {
         role: 'user',
-        content: `Extract all vendor requirements from this RFP:\n\n${documentText.slice(0, 14000)}`,
+        content: `Extract all vendor requirements from this RFP:\n\n${safeText.slice(0, 30000)}`,
       },
     ],
     response_format: FORMAT,
