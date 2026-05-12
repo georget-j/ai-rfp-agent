@@ -81,48 +81,44 @@ const SCENARIOS: Scenario[] = [
 
 export default function DemoPage() {
   return (
-    <div className="max-w-4xl">
-      <div className="mb-7">
-        <h1 className="text-xl font-semibold text-gray-900">Demo Scenarios</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Preloaded scenarios for demonstrations. Each includes representative RFP questions
-          that test the agent&apos;s retrieval accuracy, source grounding, and missing information flagging.
-        </p>
-        <p className="text-xs text-amber-600 mt-2 bg-amber-50 border border-amber-200 rounded px-3 py-2 inline-block">
-          Load the sample dataset from the Dashboard before running these scenarios.
+    <div style={{ maxWidth: 900 }}>
+      <div className="page-head" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+        <div className="eyebrow">Demo Scenarios</div>
+        <h1>Preloaded <em>scenarios</em></h1>
+        <p className="subtitle">
+          Representative RFP questions that test retrieval accuracy, source grounding, and missing information flagging.
         </p>
       </div>
 
-      <div className="space-y-8">
+      <div className="badge warn" style={{ marginBottom: 28, display: 'inline-flex' }}>
+        Load the sample dataset from the Dashboard before running these scenarios.
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {SCENARIOS.map((scenario) => (
-          <div key={scenario.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-2 mb-1">
-                <h2 className="text-sm font-semibold text-gray-900">{scenario.title}</h2>
-                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
-                  {scenario.industry}
-                </span>
-              </div>
-              <p className="text-xs text-gray-500 leading-relaxed">{scenario.description}</p>
+          <div key={scenario.id} className="card" style={{ overflow: 'hidden' }}>
+            <div className="card-head">
+              <h3>{scenario.title}</h3>
+              <span className="badge mono">{scenario.industry}</span>
             </div>
-            <div className="divide-y divide-gray-100">
+            <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)', background: 'var(--bg)' }}>
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>{scenario.description}</p>
+            </div>
+            <div>
               {scenario.questions.map((q, i) => {
                 const params = new URLSearchParams({ q: q.query })
                 if (q.context) {
                   Object.entries(q.context).forEach(([k, v]) => params.set(k, v))
                 }
                 return (
-                  <div key={i} className="px-5 py-3 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
-                    <div>
-                      <p className="text-xs font-medium text-gray-700">{q.label}</p>
-                      <p className="text-xs text-gray-400 mt-0.5 leading-relaxed line-clamp-2">
+                  <div key={i} style={{ padding: '14px 18px', borderBottom: i < scenario.questions.length - 1 ? '1px solid var(--border)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink)', marginBottom: 3 }}>{q.label}</p>
+                      <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>
                         {q.query}
                       </p>
                     </div>
-                    <Link
-                      href={`/ask?${params.toString()}`}
-                      className="shrink-0 px-3 py-1.5 text-xs font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
-                    >
+                    <Link href={`/ask?${params.toString()}`} className="btn sm" style={{ flexShrink: 0 }}>
                       Ask →
                     </Link>
                   </div>
@@ -133,9 +129,9 @@ export default function DemoPage() {
         ))}
       </div>
 
-      <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <p className="text-xs text-gray-600 leading-relaxed">
-          <strong className="text-gray-800">Evaluation note:</strong> The off-topic test in the Enterprise Security scenario
+      <div className="card card-pad" style={{ marginTop: 28, background: 'var(--bg)' }}>
+        <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.6 }}>
+          <strong style={{ color: 'var(--ink)' }}>Evaluation note:</strong> The off-topic test in the Enterprise Security scenario
           (hospital staffing) is designed to verify that the agent returns a low-confidence response and flags missing information
           rather than generating a hallucinated answer. This is a key correctness check for production deployments.
         </p>

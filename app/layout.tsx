@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import { AppHeader } from '@/components/AppHeader'
+import { AppSidebar } from '@/components/AppSidebar'
+import { AppTopbar } from '@/components/AppTopbar'
 import { WelcomeModal } from '@/components/WelcomeModal'
 
 export const metadata: Metadata = {
@@ -11,11 +12,24 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="antialiased bg-gray-50 min-h-screen">
-        <AppHeader />
-        <main className="max-w-6xl mx-auto px-6 py-8">
-          {children}
-        </main>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,400..500&family=Geist:wght@300..600&family=Geist+Mono:wght@400..500&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body>
+        <div className="app">
+          <AppSidebar />
+          <div className="main">
+            <AppTopbar />
+            <div className="content">
+              {children}
+            </div>
+          </div>
+        </div>
         <WelcomeModal />
       </body>
     </html>

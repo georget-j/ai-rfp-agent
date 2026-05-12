@@ -6,9 +6,9 @@ interface EmptyStateProps {
 
 export function EmptyState({ title, description, action }: EmptyStateProps) {
   return (
-    <div className="text-center py-16 px-6">
-      <h3 className="text-sm font-medium text-gray-900 mb-1">{title}</h3>
-      <p className="text-sm text-gray-500 mb-4 max-w-sm mx-auto">{description}</p>
+    <div style={{ textAlign: 'center', padding: '64px 24px' }}>
+      <h3 style={{ fontSize: 15, fontWeight: 500, color: 'var(--ink)', marginBottom: 6 }}>{title}</h3>
+      <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20, maxWidth: 320, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.5 }}>{description}</p>
       {action}
     </div>
   )

@@ -1,6 +1,5 @@
 import { Suspense } from 'react'
 import { AskPageClient } from '@/components/AskPageClient'
-import { LoadingState } from '@/components/LoadingState'
 
 const EXAMPLE_QUESTIONS = [
   'Draft a response to a fintech customer asking how we reduce AML review time.',
@@ -13,39 +12,44 @@ const EXAMPLE_QUESTIONS = [
 
 export default function AskPage() {
   return (
-    <div className="max-w-4xl">
-      <div className="mb-7">
-        <h1 className="text-xl font-semibold text-gray-900">Ask</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Ask an RFP question or proposal requirement. The agent searches your knowledge base
-          and generates a structured, cited response.
+    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+      <div className="page-head" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+        <div className="eyebrow">Ask</div>
+        <h1>
+          Ask anything. <em>Cited from</em><br />your knowledge base.
+        </h1>
+        <p className="subtitle">
+          Type an RFP question or proposal prompt. The agent searches your indexed documents and returns
+          a structured response with source citations and an evidence assessment.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
-          <Suspense fallback={<LoadingState />}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 32, alignItems: 'start' }}>
+        <div>
+          <Suspense fallback={
+            <div className="card card-pad" style={{ minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="eyebrow">Loading…</div>
+            </div>
+          }>
             <AskPageClient />
           </Suspense>
         </div>
 
-        <div className="lg:col-span-1">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
-            Example questions
-          </h2>
-          <ul className="space-y-2">
+        <aside style={{ position: 'sticky', top: 80 }}>
+          <div className="eyebrow" style={{ marginBottom: 12 }}>Try one of these</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {EXAMPLE_QUESTIONS.map((q, i) => (
-              <li key={i}>
-                <a
-                  href={`/ask?q=${encodeURIComponent(q)}`}
-                  className="block text-xs text-gray-600 hover:text-gray-900 leading-relaxed p-2.5 rounded border border-transparent hover:border-gray-200 hover:bg-white transition-all"
-                >
-                  {q}
-                </a>
-              </li>
+              <a
+                key={i}
+                href={`/ask?q=${encodeURIComponent(q)}`}
+                className="ask-example"
+                style={{ textDecoration: 'none' }}
+              >
+                {q}
+              </a>
             ))}
-          </ul>
-        </div>
+          </div>
+        </aside>
       </div>
     </div>
   )

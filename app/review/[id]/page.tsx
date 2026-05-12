@@ -39,12 +39,15 @@ export default async function ReviewDetailPage({
   if (error || !data) notFound()
 
   return (
-    <div className="max-w-3xl">
-      <div className="mb-7 flex items-center gap-3">
-        <Link href="/review" className="text-xs text-gray-400 hover:text-gray-700 transition-colors">
-          ← Review Queue
-        </Link>
-        <h1 className="text-xl font-semibold text-gray-900">Review Answer</h1>
+    <div style={{ maxWidth: 800 }}>
+      <div className="page-head">
+        <div className="title-block">
+          <div className="eyebrow" style={{ marginBottom: 6 }}>Review Queue</div>
+          <h1>Review <em>answer</em></h1>
+        </div>
+        <div className="actions">
+          <Link href="/review" className="btn ghost sm">← Back to queue</Link>
+        </div>
       </div>
       <ReviewCard review={data as unknown as ReviewRequest} />
     </div>

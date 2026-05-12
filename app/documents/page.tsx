@@ -13,31 +13,30 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="max-w-4xl">
-      <div className="mb-7">
-        <h1 className="text-xl font-semibold text-gray-900">Documents</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Manage your indexed knowledge base. Documents are chunked and embedded for semantic search.
-        </p>
+    <div>
+      <div className="page-head">
+        <div className="title-block">
+          <div className="eyebrow" style={{ marginBottom: 6 }}>Knowledge Base</div>
+          <h1>Indexed <em>documents</em></h1>
+          <p className="subtitle">
+            Manage your knowledge base. Documents are chunked and embedded for semantic search.
+          </p>
+        </div>
       </div>
 
-      {/* Two-column upload area */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-8">
-        <div>
-          <h2 className="text-sm font-medium text-gray-700 mb-2">Upload a document</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 36 }}>
+        <div className="card card-pad">
+          <div className="eyebrow" style={{ marginBottom: 10 }}>Upload a document</div>
           <DocumentUpload onSuccess={handleNewDoc} />
         </div>
-        <div>
-          <h2 className="text-sm font-medium text-gray-700 mb-2">Load sample dataset</h2>
+        <div className="card card-pad">
+          <div className="eyebrow" style={{ marginBottom: 10 }}>Load sample dataset</div>
           <SampleDataLoader onSuccess={handleNewDoc} />
         </div>
       </div>
 
-      {/* Document list */}
-      <div>
-        <h2 className="text-sm font-medium text-gray-700 mb-3">Indexed documents</h2>
-        <DocumentList refreshKey={refreshKey} />
-      </div>
+      <div className="section-title">Indexed documents</div>
+      <DocumentList refreshKey={refreshKey} />
     </div>
   )
 }

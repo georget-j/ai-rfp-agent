@@ -139,101 +139,87 @@ export function QueryForm({ initialQuery = '', initialContext = {} }: QueryFormP
   const isLoading = phase === 'retrieving' || phase === 'generating'
 
   return (
-    <div className="space-y-6">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="query" className="block text-sm font-medium text-gray-700 mb-1.5">
-            Your question or RFP requirement
-          </label>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="ask-input-wrap">
           <textarea
-            id="query"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="e.g. Draft a response to a fintech customer asking how we reduce AML review time…"
-            rows={4}
-            className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent resize-none"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault()
+                if (query.trim() && !isLoading) handleSubmit(e as unknown as React.FormEvent)
+              }
+            }}
+            placeholder="e.g. What's our SOC 2 status and when was the last audit?"
+            rows={3}
+            className="ask-input"
             required
           />
+          <div className="ask-input-bar">
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--muted)', fontSize: 12 }}>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 2h7l3 3v9H3V2z" /><path d="M10 2v3h3" /><path d="M6 7h4M6 10h4" />
+              </svg>
+              Knowledge base indexed
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                <span className="kbd">⌘</span> + <span className="kbd">↵</span>
+              </span>
+              <button type="submit" disabled={isLoading || !query.trim()} className="btn accent">
+                {isLoading ? (
+                  <>{phase === 'retrieving' ? 'Searching…' : 'Generating…'}</>
+                ) : (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="3,2 14,8 3,14" />
+                    </svg>
+                    Ask
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
 
         <div>
           <button
             type="button"
             onClick={() => setShowContext(!showContext)}
-            className="text-xs text-gray-500 hover:text-gray-800 underline"
+            className="btn ghost sm"
           >
-            {showContext ? 'Hide context fields' : '+ Add RFP context (optional)'}
+            {showContext ? '− Hide context' : '+ Add RFP context (optional)'}
           </button>
         </div>
 
         {showContext && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Industry</label>
-              <select
-                value={industry}
-                onChange={(e) => setIndustry(e.target.value)}
-                className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-gray-900"
-              >
-                {INDUSTRY_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Response type</label>
-              <select
-                value={responseType}
-                onChange={(e) => setResponseType(e.target.value)}
-                className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-gray-900"
-              >
-                {RESPONSE_TYPE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Tone</label>
-              <select
-                value={tone}
-                onChange={(e) => setTone(e.target.value)}
-                className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-gray-900"
-              >
-                {TONE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
+          <div className="card card-pad-sm" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+            {[
+              { label: 'Industry', value: industry, setter: setIndustry, options: INDUSTRY_OPTIONS },
+              { label: 'Response type', value: responseType, setter: setResponseType, options: RESPONSE_TYPE_OPTIONS },
+              { label: 'Tone', value: tone, setter: setTone, options: TONE_OPTIONS },
+            ].map(({ label, value, setter, options }) => (
+              <div key={label}>
+                <label className="label">{label}</label>
+                <select
+                  value={value}
+                  onChange={(e) => setter(e.target.value)}
+                  className="input"
+                  style={{ padding: '6px 9px' }}
+                >
+                  {options.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
           </div>
         )}
-
-        <button
-          type="submit"
-          disabled={isLoading || !query.trim()}
-          className="px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-        >
-          {isLoading ? (
-            <>
-              <span className="flex gap-0.5">
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    className="w-1 h-1 bg-white rounded-full animate-bounce"
-                    style={{ animationDelay: `${i * 0.15}s` }}
-                  />
-                ))}
-              </span>
-              <span>{phase === 'retrieving' ? 'Searching knowledge base…' : 'Generating response…'}</span>
-            </>
-          ) : (
-            'Generate RFP Response'
-          )}
-        </button>
       </form>
 
       {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}
 
-      {/* Streaming / completed response */}
       {(partial || result) && (
         <ResponseCard
           result={result ?? undefined}
