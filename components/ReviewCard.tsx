@@ -46,6 +46,24 @@ const TOPIC_LABEL: Record<string, string> = {
   general: 'General',
 }
 
+const SUGGESTED_OWNER_LABEL: Record<string, string> = {
+  product: 'Product',
+  engineering: 'Engineering',
+  commercial: 'Commercial',
+  legal: 'Legal',
+  customer: 'Customer Success',
+  unknown: 'Unknown',
+}
+
+const SUGGESTED_OWNER_TOPIC: Record<string, string> = {
+  product: 'general',
+  engineering: 'technical',
+  commercial: 'commercial',
+  legal: 'legal',
+  customer: 'support',
+  unknown: 'general',
+}
+
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   if (diff < 60_000) return 'just now'
@@ -86,7 +104,9 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
   const [editedAnswer, setEditedAnswer] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState<'approved' | 'rejected' | null>(null)
+  const [ingestedToKB, setIngestedToKB] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [routingConfigs, setRoutingConfigs] = useState<Record<string, string>>({})
 
   // Comments
   const [comments, setComments] = useState<Comment[]>([])
@@ -115,6 +135,15 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
         .then((data) => { if (Array.isArray(data.audit_log)) setAuditLog(data.audit_log) })
         .catch(() => null)
     }
+
+    fetch('/api/admin/routing')
+      .then((r) => r.json())
+      .then((data: Array<{ topic: string; owner_email: string }>) => {
+        if (Array.isArray(data)) {
+          setRoutingConfigs(Object.fromEntries(data.map((c) => [c.topic, c.owner_email])))
+        }
+      })
+      .catch(() => null)
   }, [review.id, review.audit_log])
 
   async function submit(action: 'approve' | 'reject') {
@@ -131,6 +160,7 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Failed')
+      if (action === 'approve' && json.ingested) setIngestedToKB(true)
       setDone(action === 'approve' ? 'approved' : 'rejected')
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Unknown error')
@@ -179,11 +209,16 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
         <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink)', marginBottom: 6 }}>
           {done === 'approved' ? 'Answer approved' : 'Answer rejected'}
         </p>
-        <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.5 }}>
+        <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: ingestedToKB ? 8 : 24, lineHeight: 1.5 }}>
           {done === 'approved'
-            ? 'The approved answer has been saved and added to the knowledge base.'
+            ? 'The approved answer has been saved.'
             : 'The answer has been marked as rejected.'}
         </p>
+        {ingestedToKB && (
+          <p style={{ fontSize: 12, color: 'var(--success)', marginBottom: 24 }}>
+            Saved to knowledge base
+          </p>
+        )}
         <button onClick={() => router.push('/review')} className="btn ghost sm">
           ← Back to queue
         </button>
@@ -287,12 +322,22 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
         <section className="card card-pad">
           <p className="eyebrow" style={{ marginBottom: 10 }}>Missing Information ({answer.missing_information.length})</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {answer.missing_information.map((m, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                <span className="badge ink mono" style={{ flexShrink: 0, fontSize: 11 }}>{m.suggested_owner}</span>
-                <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5 }}>{m.item}</p>
-              </div>
-            ))}
+            {answer.missing_information.map((m, i) => {
+              const ownerEmail = routingConfigs[SUGGESTED_OWNER_TOPIC[m.suggested_owner] ?? 'general']
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                  <span className="badge ink mono" style={{ flexShrink: 0, fontSize: 11 }}>
+                    {SUGGESTED_OWNER_LABEL[m.suggested_owner] ?? m.suggested_owner}
+                  </span>
+                  {ownerEmail && (
+                    <span style={{ fontSize: 11, color: 'var(--muted-2)', fontFamily: 'var(--font-mono)', flexShrink: 0, paddingTop: 2 }}>
+                      → {ownerEmail}
+                    </span>
+                  )}
+                  <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5 }}>{m.item}</p>
+                </div>
+              )
+            })}
           </div>
         </section>
       )}

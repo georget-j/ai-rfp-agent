@@ -146,12 +146,14 @@ export async function POST(request: NextRequest) {
       }
 
       controller.enqueue(sseEvent('done', { total: questions.length }))
-      controller.close()
 
-      // Fire-and-forget: route low-confidence answers after SSE closes
-      routeAnswersForReview(completed, rfpRunId, rfpTitle ?? 'RFP').catch((err) =>
+      // Await routing before closing — on Vercel the Lambda may terminate as soon
+      // as the stream closes, so routing must complete while the stream is still open.
+      await routeAnswersForReview(completed, rfpRunId, rfpTitle ?? 'RFP').catch((err) =>
         console.error('[answer-batch] routing error:', err),
       )
+
+      controller.close()
     },
   })
 

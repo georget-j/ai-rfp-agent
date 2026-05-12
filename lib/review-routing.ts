@@ -85,6 +85,7 @@ export async function routeAnswersForReview(
       riskLevel: item.riskLevel,
       confidenceScore: score,
       assignedTo: routingConfig.owner_email,
+      escalationHours: routingConfig.escalation_hours,
     })
     if (!reviewRequest) continue
 

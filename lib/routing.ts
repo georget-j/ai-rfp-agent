@@ -48,11 +48,12 @@ export async function createReviewRequest(params: {
   riskLevel: string
   confidenceScore: number
   assignedTo: string
+  escalationHours?: number
 }): Promise<ReviewRequestRow | null> {
   const supabase = getServiceSupabase()
 
   const dueAt = new Date()
-  dueAt.setHours(dueAt.getHours() + 48)
+  dueAt.setHours(dueAt.getHours() + (params.escalationHours ?? 48))
 
   const { data, error } = await supabase
     .from('review_requests')
