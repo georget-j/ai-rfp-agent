@@ -5,8 +5,25 @@ import { retrieveChunks } from '@/lib/retrieval'
 import { verifyCitations } from '@/lib/citations'
 import { buildSystemPrompt, buildUserPrompt } from '@/lib/prompts'
 import { AskRequestSchema, RFPResponseSchema } from '@/lib/schema'
+import type { RFPContext } from '@/lib/schema'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { aiOpenAI, CHAT_MODEL } from '@/lib/openai'
+import { routeAnswersForReview } from '@/lib/review-routing'
+
+function topicFromContext(ctx?: RFPContext | null): string {
+  switch (ctx?.response_type) {
+    case 'security-compliance': return 'security_compliance'
+    case 'technical-answer': return 'technical'
+    case 'implementation-approach': return 'implementation'
+    case 'case-study': return 'commercial'
+    default: return 'general'
+  }
+}
+
+function riskFromContext(ctx?: RFPContext | null): string {
+  if (ctx?.response_type === 'security-compliance') return 'high'
+  return 'medium'
+}
 
 const encoder = new TextEncoder()
 
@@ -57,6 +74,7 @@ export async function POST(request: NextRequest) {
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.2,
+      maxOutputTokens: 1500,
     })
 
     const stream = new ReadableStream({
@@ -86,7 +104,20 @@ export async function POST(request: NextRequest) {
             retrieved_chunk_ids: [...retrievedIds],
           })
 
-          controller.enqueue(sseEvent('done', { removed_citations: removedCount }))
+          const routed = await routeAnswersForReview(
+            [{
+              queryId: queryRecord.id,
+              questionText: query,
+              section: 'Single Question',
+              topic: topicFromContext(rfp_context),
+              riskLevel: riskFromContext(rfp_context),
+              response,
+            }],
+            undefined,
+            query.slice(0, 80),
+          ).catch((err) => { console.error('[ask] routing error:', err); return 0 })
+
+          controller.enqueue(sseEvent('done', { removed_citations: removedCount, routed }))
           controller.close()
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown error'

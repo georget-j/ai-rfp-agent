@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { ErrorAlert } from './ErrorAlert'
 import { ResponseCard } from './ResponseCard'
 import type { AskResponse, PartialRFPResponse, RFPContext, RetrievedChunk } from '@/lib/schema'
@@ -55,6 +56,7 @@ export function QueryForm({ initialQuery = '', initialContext = {} }: QueryFormP
   const [retrievedChunks, setRetrievedChunks] = useState<RetrievedChunk[]>([])
   const [partial, setPartial] = useState<PartialRFPResponse | null>(null)
   const [result, setResult] = useState<AskResponse | null>(null)
+  const [routedCount, setRoutedCount] = useState(0)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -66,6 +68,7 @@ export function QueryForm({ initialQuery = '', initialContext = {} }: QueryFormP
     setPartial(null)
     setQueryId(null)
     setRetrievedChunks([])
+    setRoutedCount(0)
 
     const rfpContext: RFPContext = {}
     if (industry) rfpContext.industry = industry as RFPContext['industry']
@@ -124,6 +127,7 @@ export function QueryForm({ initialQuery = '', initialContext = {} }: QueryFormP
                 unverified_citations_removed: event.removed_citations ?? 0,
               })
             }
+            setRoutedCount(event.routed ?? 0)
             setPhase('done')
           } else if (event.type === 'error') {
             throw new Error(event.message)
@@ -219,6 +223,24 @@ export function QueryForm({ initialQuery = '', initialContext = {} }: QueryFormP
       </form>
 
       {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}
+
+      {phase === 'done' && routedCount > 0 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          padding: '12px 16px',
+          background: 'var(--accent-tint)',
+          border: '1px solid color-mix(in oklch, var(--accent) 20%, transparent)',
+          borderRadius: 'var(--r-sm)',
+        }}>
+          <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--accent)', margin: 0 }}>
+            {routedCount} answer{routedCount !== 1 ? 's' : ''} sent for human review
+          </p>
+          <Link href="/review" className="btn accent sm">View review queue →</Link>
+        </div>
+      )}
 
       {(partial || result) && (
         <ResponseCard
