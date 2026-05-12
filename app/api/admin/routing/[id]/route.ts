@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server'
 import * as z from 'zod'
-import { getAuthUser } from '@/lib/supabase-server'
 import { getServiceSupabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
 const PatchRoutingSchema = z.object({
-  owner_email: z.string().email().optional(),
-  backup_email: z.string().email().optional().nullable(),
-  slack_webhook_url: z.string().url().optional().nullable(),
+  owner_email: z.email().optional(),
+  backup_email: z.email().optional().nullable(),
+  slack_webhook_url: z.url().optional().nullable(),
   preferred_channel: z.enum(['email', 'slack', 'both']).optional(),
   escalation_hours: z.number().int().positive().optional(),
 })
@@ -17,9 +16,6 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await getAuthUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { id } = await params
 
   let body: unknown
@@ -50,9 +46,6 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await getAuthUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { id } = await params
   const supabase = getServiceSupabase()
 

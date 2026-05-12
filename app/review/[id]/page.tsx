@@ -1,5 +1,4 @@
-import { redirect, notFound } from 'next/navigation'
-import { getAuthUser } from '@/lib/supabase-server'
+import { notFound } from 'next/navigation'
 import { getServiceSupabase } from '@/lib/supabase'
 import { ReviewCard } from '@/components/ReviewCard'
 import Link from 'next/link'
@@ -25,9 +24,6 @@ export default async function ReviewDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const user = await getAuthUser()
-  if (!user) redirect('/auth/error')
-
   const { id } = await params
   const supabase = getServiceSupabase()
 
@@ -38,7 +34,6 @@ export default async function ReviewDetailPage({
       queries(query_text, rfp_context, query_results(answer))
     `)
     .eq('id', id)
-    .eq('assigned_to', user.email)
     .single()
 
   if (error || !data) notFound()

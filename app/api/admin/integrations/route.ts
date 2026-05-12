@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import * as z from 'zod'
-import { getAuthUser } from '@/lib/supabase-server'
 import { getServiceSupabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -12,9 +11,6 @@ const UpsertIntegrationSchema = z.object({
 })
 
 export async function GET() {
-  const user = await getAuthUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const supabase = getServiceSupabase()
   const { data, error } = await supabase
     .from('integration_settings')
@@ -26,9 +22,6 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const user = await getAuthUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   let body: unknown
   try {
     body = await req.json()

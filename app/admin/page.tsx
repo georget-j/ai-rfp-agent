@@ -1,12 +1,7 @@
-import { redirect } from 'next/navigation'
-import { getAuthUser } from '@/lib/supabase-server'
 import { RoutingConfigTable } from '@/components/RoutingConfigTable'
 import { IntegrationPanel } from '@/components/IntegrationPanel'
 
-export default async function AdminPage() {
-  const user = await getAuthUser()
-  if (!user) redirect('/auth/error')
-
+export default function AdminPage() {
   return (
     <div className="max-w-4xl space-y-10">
       <div>

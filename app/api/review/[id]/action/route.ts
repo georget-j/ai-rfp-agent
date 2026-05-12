@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import * as z from 'zod'
-import { getAuthUser } from '@/lib/supabase-server'
 import { getServiceSupabase } from '@/lib/supabase'
 import { ingestDocument } from '@/lib/documents'
 
@@ -16,9 +15,6 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await getAuthUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { id } = await params
 
   let action: string
@@ -37,19 +33,16 @@ export async function POST(
 
   const supabase = getServiceSupabase()
 
-  // Load the review request — verify ownership
   const { data: reviewRequest, error: rrError } = await supabase
     .from('review_requests')
     .select('id, query_id, topic, risk_level, rfp_run_id, assigned_to')
     .eq('id', id)
-    .eq('assigned_to', user.email)
     .single()
 
   if (rrError || !reviewRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  // Load the original query + answer
   const { data: queryData, error: qError } = await supabase
     .from('queries')
     .select('query_text, rfp_context, query_results(answer)')
@@ -73,14 +66,13 @@ export async function POST(
     return NextResponse.json({ success: true, action: 'rejected' })
   }
 
-  // action === 'approve'
   let ingestedDocumentId: string | null = null
 
   try {
     const today = new Date().toISOString().slice(0, 10)
     const shortQ = queryData.query_text.slice(0, 80)
     const docTitle = `Approved Answer: ${shortQ}`
-    const content = `Q: ${queryData.query_text}\n\nA: ${approvedText}\n\nApproved by: ${user.email} on ${today}`
+    const content = `Q: ${queryData.query_text}\n\nA: ${approvedText}\n\nApproved on: ${today}`
 
     const result = await ingestDocument({
       text: content,
@@ -97,7 +89,7 @@ export async function POST(
     query_id: reviewRequest.query_id,
     original_question: queryData.query_text,
     approved_answer: approvedText,
-    approved_by: user.email,
+    approved_by: 'demo',
     topic: reviewRequest.topic,
     source_rfp: (queryData.rfp_context as Record<string, unknown> | null)?.rfp_title as string ?? null,
     ingested_as_document_id: ingestedDocumentId,

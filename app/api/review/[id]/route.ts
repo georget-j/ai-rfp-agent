@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/supabase-server'
 import { getServiceSupabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -8,9 +7,6 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await getAuthUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { id } = await params
   const supabase = getServiceSupabase()
 
@@ -22,7 +18,6 @@ export async function GET(
       queries(query_text, rfp_context, query_results(answer, retrieved_chunk_ids, created_at))
     `)
     .eq('id', id)
-    .eq('assigned_to', user.email)
     .single()
 
   if (error || !reviewRequest) {

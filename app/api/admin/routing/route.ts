@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import * as z from 'zod'
-import { getAuthUser } from '@/lib/supabase-server'
 import { getAllRoutingConfigs } from '@/lib/routing'
 import { getServiceSupabase } from '@/lib/supabase'
 
@@ -8,25 +7,19 @@ export const dynamic = 'force-dynamic'
 
 const CreateRoutingSchema = z.object({
   topic: z.string().min(1),
-  owner_email: z.string().email(),
-  backup_email: z.string().email().optional().nullable(),
-  slack_webhook_url: z.string().url().optional().nullable(),
+  owner_email: z.email(),
+  backup_email: z.email().optional().nullable(),
+  slack_webhook_url: z.url().optional().nullable(),
   preferred_channel: z.enum(['email', 'slack', 'both']).default('email'),
   escalation_hours: z.number().int().positive().default(48),
 })
 
 export async function GET() {
-  const user = await getAuthUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const configs = await getAllRoutingConfigs()
   return NextResponse.json(configs)
 }
 
 export async function POST(req: Request) {
-  const user = await getAuthUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   let body: unknown
   try {
     body = await req.json()
