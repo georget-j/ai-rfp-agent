@@ -19,13 +19,13 @@ const BatchRequestSchema = z.object({
       }),
     )
     .min(1)
-    .max(50),
+    .max(100),
 })
 
 type Question = z.infer<typeof BatchRequestSchema>['questions'][number]
 
 const encoder = new TextEncoder()
-const CONCURRENCY = 4
+const CONCURRENCY = 5
 
 function sseEvent(type: string, payload: unknown): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ type, ...payload as object })}\n\n`)
