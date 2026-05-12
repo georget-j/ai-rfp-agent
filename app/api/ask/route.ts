@@ -9,20 +9,42 @@ import type { RFPContext } from '@/lib/schema'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { aiOpenAI, CHAT_MODEL } from '@/lib/openai'
 import { routeAnswersForReview } from '@/lib/review-routing'
+import type { RFPResponse } from '@/lib/schema'
 
-function topicFromContext(ctx?: RFPContext | null): string {
-  switch (ctx?.response_type) {
-    case 'security-compliance': return 'security_compliance'
-    case 'technical-answer': return 'technical'
-    case 'implementation-approach': return 'implementation'
-    case 'case-study': return 'commercial'
-    default: return 'general'
-  }
+const SUGGESTED_OWNER_TO_TOPIC: Record<string, string> = {
+  engineering: 'engineering',
+  legal: 'legal',
+  commercial: 'commercial',
+  customer: 'support',
+  product: 'general',
+  unknown: 'general',
 }
 
-function riskFromContext(ctx?: RFPContext | null): string {
-  if (ctx?.response_type === 'security-compliance') return 'high'
-  return 'medium'
+function deriveRouting(response: RFPResponse, ctx?: RFPContext | null): { topic: string; riskLevel: string } {
+  // Use the LLM's own suggested_owner from missing_information — most frequent non-unknown wins
+  const owners = (response.missing_information ?? [])
+    .map((m) => m.suggested_owner)
+    .filter((o) => o !== 'unknown')
+
+  if (owners.length > 0) {
+    const counts = owners.reduce<Record<string, number>>((acc, o) => {
+      acc[o] = (acc[o] ?? 0) + 1
+      return acc
+    }, {})
+    const topOwner = Object.entries(counts).sort(([, a], [, b]) => b - a)[0][0]
+    const topic = SUGGESTED_OWNER_TO_TOPIC[topOwner] ?? 'general'
+    const riskLevel = topic === 'legal' || topic === 'security_compliance' ? 'high' : 'medium'
+    return { topic, riskLevel }
+  }
+
+  // Fall back to rfp_context response_type
+  switch (ctx?.response_type) {
+    case 'security-compliance': return { topic: 'security_compliance', riskLevel: 'high' }
+    case 'technical-answer':    return { topic: 'technical',           riskLevel: 'medium' }
+    case 'implementation-approach': return { topic: 'implementation',  riskLevel: 'medium' }
+    case 'case-study':          return { topic: 'commercial',          riskLevel: 'low' }
+    default:                    return { topic: 'general',             riskLevel: 'medium' }
+  }
 }
 
 const encoder = new TextEncoder()
@@ -104,13 +126,14 @@ export async function POST(request: NextRequest) {
             retrieved_chunk_ids: [...retrievedIds],
           })
 
+          const { topic, riskLevel } = deriveRouting(response, rfp_context)
           const routed = await routeAnswersForReview(
             [{
               queryId: queryRecord.id,
               questionText: query,
               section: 'Single Question',
-              topic: topicFromContext(rfp_context),
-              riskLevel: riskFromContext(rfp_context),
+              topic,
+              riskLevel,
               response,
             }],
             undefined,
