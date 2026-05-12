@@ -107,6 +107,8 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [editedAnswer, setEditedAnswer] = useState('')
+  const [savedEdit, setSavedEdit] = useState<string | null>(null)
+  const [showOriginalTooltip, setShowOriginalTooltip] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState<'approved' | 'rejected' | null>(null)
   const [ingestedToKB, setIngestedToKB] = useState(false)
@@ -162,7 +164,7 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action,
-          edited_answer: editing && editedAnswer.trim() ? editedAnswer.trim() : undefined,
+          edited_answer: savedEdit ?? undefined,
         }),
       })
       const json = await res.json()
@@ -336,9 +338,60 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
         </section>
       )}
 
-      {/* Draft answer */}
+      {/* Draft / edited answer */}
       <section className="card card-pad">
-        <p className="eyebrow" style={{ marginBottom: 8 }}>AI Draft Answer</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <p className="eyebrow" style={{ margin: 0 }}>
+            {savedEdit ? 'Edited Answer' : 'AI Draft Answer'}
+          </p>
+          {savedEdit && savedEdit !== draftAnswer && (
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <span
+                onMouseEnter={() => setShowOriginalTooltip(true)}
+                onMouseLeave={() => setShowOriginalTooltip(false)}
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: 'var(--warn)',
+                  background: 'color-mix(in oklch, var(--warn) 12%, var(--surface))',
+                  border: '1px solid color-mix(in oklch, var(--warn) 30%, transparent)',
+                  borderRadius: 4,
+                  padding: '2px 6px',
+                  cursor: 'default',
+                  userSelect: 'none',
+                }}
+              >
+                ✎ Edited by reviewer
+              </span>
+              {showOriginalTooltip && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  marginTop: 6,
+                  zIndex: 50,
+                  width: 340,
+                  padding: '10px 12px',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--r-sm)',
+                  boxShadow: '0 4px 16px color-mix(in oklch, var(--ink) 12%, transparent)',
+                  fontSize: 12,
+                  color: 'var(--muted)',
+                  lineHeight: 1.5,
+                  whiteSpace: 'pre-wrap',
+                  maxHeight: 200,
+                  overflowY: 'auto',
+                }}>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-2)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Original AI draft
+                  </p>
+                  {draftAnswer}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         {editing ? (
           <textarea
             value={editedAnswer}
@@ -349,8 +402,8 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
           />
         ) : (
           <div style={{
-            background: 'var(--bg)',
-            border: '1px solid var(--border)',
+            background: savedEdit ? 'color-mix(in oklch, var(--warn) 4%, var(--bg))' : 'var(--bg)',
+            border: savedEdit ? '1px solid color-mix(in oklch, var(--warn) 20%, var(--border))' : '1px solid var(--border)',
             borderRadius: 'var(--r-sm)',
             padding: '14px 16px',
             fontSize: 13.5,
@@ -358,7 +411,7 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
             whiteSpace: 'pre-wrap',
             lineHeight: 1.6,
           }}>
-            {draftAnswer}
+            {savedEdit ?? draftAnswer}
           </div>
         )}
       </section>
@@ -446,27 +499,40 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
       )}
 
       {/* Actions */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4, flexWrap: 'wrap' }}>
         {editing ? (
           <>
-            <button onClick={() => submit('approve')} disabled={submitting} className="btn accent">
-              {submitting ? 'Saving…' : 'Save & Approve'}
+            <button
+              onClick={() => {
+                if (editedAnswer.trim() && editedAnswer.trim() !== draftAnswer) {
+                  setSavedEdit(editedAnswer.trim())
+                }
+                setEditing(false)
+              }}
+              disabled={submitting}
+              className="btn accent"
+            >
+              Save edits
             </button>
-            <button onClick={() => { setEditing(false); setEditedAnswer('') }} disabled={submitting} className="btn ghost">
+            <button
+              onClick={() => { setEditing(false); setEditedAnswer('') }}
+              disabled={submitting}
+              className="btn ghost"
+            >
               Cancel
             </button>
           </>
         ) : (
           <>
             <button onClick={() => submit('approve')} disabled={submitting} className="btn accent">
-              {submitting ? 'Saving…' : 'Approve'}
+              {submitting ? 'Saving…' : savedEdit ? 'Approve edited answer' : 'Approve'}
             </button>
             <button
-              onClick={() => { setEditing(true); setEditedAnswer(draftAnswer) }}
+              onClick={() => { setEditing(true); setEditedAnswer(savedEdit ?? draftAnswer) }}
               disabled={submitting}
               className="btn"
             >
-              Edit & Approve
+              {savedEdit ? 'Edit again' : 'Edit answer'}
             </button>
             <button onClick={() => submit('reject')} disabled={submitting} className="btn danger">
               {submitting ? '…' : 'Reject'}

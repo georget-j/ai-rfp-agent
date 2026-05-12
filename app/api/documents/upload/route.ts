@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ingestDocument } from '@/lib/documents'
+import { ingestDocument, purgeStaleUploads } from '@/lib/documents'
 import { extractText, ALLOWED_EXTENSIONS } from '@/lib/extractors'
 import { checkRateLimit } from '@/lib/rate-limit'
 
@@ -8,6 +8,10 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 export async function POST(request: NextRequest) {
   const limited = await checkRateLimit(request, 'upload')
   if (limited) return limited
+
+  void purgeStaleUploads().catch((err) =>
+    console.warn('[upload] purgeStaleUploads failed:', err),
+  )
 
   try {
     const formData = await request.formData()

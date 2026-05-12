@@ -11,6 +11,18 @@ A walkthrough guide for live demos, interview conversations, and Loom recordings
 3. Check the dashboard shows documents loaded (you'll see a count)
 4. If not loaded yet, click "Load Sample Documents" and wait for the confirmation
 
+### Public-demo deploy checklist
+
+If you're deploying this for a public demo (anyone on the internet can hit it):
+
+1. Set `DEMO_MODE=true` in the Vercel env. This suppresses outbound review email/Slack so visitors triggering low-confidence answers can't spam the owner's inbox. Review-request rows are still created, so `/review` still works for owner browsing.
+2. Verify the rate-limit RPC is deployed in Supabase. Without it, `lib/rate-limit.ts` fails open and the per-IP caps (ask: 20/hr, upload: 10/hr, seed: 3/hr) are phantom. Check:
+   ```bash
+   psql "$SUPABASE_DB_URL" -c "select check_rate_limit('test', 'ask', 3600, 20);"
+   ```
+   If it errors, push `supabase/migrations/007_rate_limits.sql` via `supabase db push` or paste it into the Supabase SQL editor.
+3. Uploads are open to visitors but `purgeStaleUploads()` runs on every upload and deletes `source_type='upload'` documents older than 24h, so the shared KB doesn't drift. Sample docs (`source_type='sample'`) are kept forever.
+
 ---
 
 ## Section 1: Frame the problem (1 min)

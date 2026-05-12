@@ -99,6 +99,22 @@ export async function deleteDocument(documentId: string): Promise<void> {
   if (error) throw new Error(`Failed to delete document: ${error.message}`)
 }
 
+export async function purgeStaleUploads(maxAgeHours = 24): Promise<number> {
+  const supabase = getServiceSupabase()
+  const cutoff = new Date(Date.now() - maxAgeHours * 3600_000).toISOString()
+  const { data, error } = await supabase
+    .from('documents')
+    .delete()
+    .eq('source_type', 'upload')
+    .lt('created_at', cutoff)
+    .select('id')
+  if (error) {
+    console.warn('[purge]', error.message)
+    return 0
+  }
+  return data?.length ?? 0
+}
+
 export async function documentExists(title: string): Promise<boolean> {
   const supabase = getServiceSupabase()
   const { data } = await supabase

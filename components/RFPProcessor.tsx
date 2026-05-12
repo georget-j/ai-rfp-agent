@@ -33,7 +33,11 @@ export function RFPProcessor() {
   const [progress, setProgress] = useState({ done: 0, total: 0 })
 
   const [exporting, setExporting] = useState(false)
-  const [routedCount, setRoutedCount] = useState(0)
+  const [pendingReview, setPendingReview] = useState<Array<{ queryId: string; topic: string; teamLabel: string; riskLevel: string; score: number }>>([])
+  const [rfpRunIdForRouting, setRfpRunIdForRouting] = useState('')
+  const [rfpTitleForRouting, setRfpTitleForRouting] = useState('')
+  const [routingSent, setRoutingSent] = useState(false)
+  const [sendingRouting, setSendingRouting] = useState(false)
 
   // ── Step 1: Upload & extract ──────────────────────────────────────────────
 
@@ -158,7 +162,9 @@ export function RFPProcessor() {
             })
             setProgress((prev) => ({ ...prev, done: prev.done + 1 }))
           } else if (event.type === 'done') {
-            setRoutedCount(event.routed ?? 0)
+            setPendingReview(event.pending_review ?? [])
+            setRfpRunIdForRouting(event.rfp_run_id ?? '')
+            setRfpTitleForRouting(event.rfp_title ?? rfpTitle)
             setStep('done')
           }
         }
@@ -166,6 +172,31 @@ export function RFPProcessor() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
       setStep('reviewing')
+    }
+  }
+
+  // ── Send for review ───────────────────────────────────────────────────────
+
+  async function sendForReview() {
+    if (!pendingReview.length) return
+    setSendingRouting(true)
+    try {
+      const res = await fetch('/api/review/confirm-routing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: pendingReview.map(({ queryId, topic, riskLevel, score }) => ({ queryId, topic, riskLevel, score })),
+          rfp_run_id: rfpRunIdForRouting || undefined,
+          rfp_title: rfpTitleForRouting,
+        }),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? 'Failed') }
+      setRoutingSent(true)
+      setPendingReview([])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send for review')
+    } finally {
+      setSendingRouting(false)
     }
   }
 
@@ -316,8 +347,33 @@ export function RFPProcessor() {
             )}
           </div>
 
-          {/* Review routing banner */}
-          {step === 'done' && routedCount > 0 && (
+          {/* Review routing — confirmation prompt */}
+          {step === 'done' && pendingReview.length > 0 && (
+            <div style={{
+              padding: '14px 16px',
+              background: 'var(--warn-tint, color-mix(in oklch, var(--warn) 10%, var(--surface)))',
+              border: '1px solid color-mix(in oklch, var(--warn) 25%, transparent)',
+              borderRadius: 'var(--r-sm)',
+            }}>
+              <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>
+                {pendingReview.length} answer{pendingReview.length !== 1 ? 's' : ''} may need human review
+              </p>
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.5 }}>
+                {Array.from(new Set(pendingReview.map((c) => c.teamLabel))).join(', ')} — Send for review?
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={sendForReview} disabled={sendingRouting} className="btn accent sm">
+                  {sendingRouting ? 'Sending…' : `Yes, send ${pendingReview.length} for review`}
+                </button>
+                <button onClick={() => setPendingReview([])} disabled={sendingRouting} className="btn ghost sm">
+                  Skip
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Review routing — sent confirmation */}
+          {step === 'done' && routingSent && (
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -329,7 +385,7 @@ export function RFPProcessor() {
               borderRadius: 'var(--r-sm)',
             }}>
               <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--accent)' }}>
-                {routedCount} answer{routedCount !== 1 ? 's' : ''} sent for human review
+                Sent for human review
               </p>
               <Link href="/review" className="btn accent sm">
                 View review queue →

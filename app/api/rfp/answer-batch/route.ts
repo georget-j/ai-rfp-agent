@@ -7,7 +7,7 @@ import { generateRFPResponse } from '@/lib/generation'
 import { verifyCitations } from '@/lib/citations'
 import { getServiceSupabase } from '@/lib/supabase'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { routeAnswersForReview } from '@/lib/review-routing'
+import { computeRoutingCandidates } from '@/lib/review-routing'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { RFPResponse } from '@/lib/schema'
 
@@ -145,13 +145,16 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Route first so the done event carries the accurate server-side count.
-      // The stream stays open during routing (~1-3s); maxDuration=60 gives headroom.
-      const routed = await routeAnswersForReview(completed, rfpRunId, rfpTitle ?? 'RFP').catch(
-        (err) => { console.error('[answer-batch] routing error:', err); return 0 },
+      const pendingReview = await computeRoutingCandidates(completed).catch(
+        (err) => { console.error('[answer-batch] routing check error:', err); return [] },
       )
 
-      controller.enqueue(sseEvent('done', { total: questions.length, routed }))
+      controller.enqueue(sseEvent('done', {
+        total: questions.length,
+        pending_review: pendingReview,
+        rfp_run_id: rfpRunId,
+        rfp_title: rfpTitle ?? 'RFP',
+      }))
       controller.close()
     },
   })

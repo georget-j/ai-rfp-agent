@@ -8,7 +8,7 @@ import { AskRequestSchema, RFPResponseSchema } from '@/lib/schema'
 import type { RFPContext } from '@/lib/schema'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { aiOpenAI, CHAT_MODEL } from '@/lib/openai'
-import { routeAnswersForReview } from '@/lib/review-routing'
+import { computeRoutingCandidates } from '@/lib/review-routing'
 import type { RFPResponse } from '@/lib/schema'
 
 const SUGGESTED_OWNER_TO_TOPIC: Record<string, string> = {
@@ -127,20 +127,20 @@ export async function POST(request: NextRequest) {
           })
 
           const { topic, riskLevel } = deriveRouting(response, rfp_context)
-          const routed = await routeAnswersForReview(
-            [{
-              queryId: queryRecord.id,
-              questionText: query,
-              section: 'Single Question',
-              topic,
-              riskLevel,
-              response,
-            }],
-            undefined,
-            query.slice(0, 80),
-          ).catch((err) => { console.error('[ask] routing error:', err); return 0 })
+          const pendingReview = await computeRoutingCandidates([{
+            queryId: queryRecord.id,
+            questionText: query,
+            section: 'Single Question',
+            topic,
+            riskLevel,
+            response,
+          }]).catch((err) => { console.error('[ask] routing check error:', err); return [] })
 
-          controller.enqueue(sseEvent('done', { removed_citations: removedCount, routed }))
+          controller.enqueue(sseEvent('done', {
+            removed_citations: removedCount,
+            pending_review: pendingReview,
+            rfp_title: query.slice(0, 80),
+          }))
           controller.close()
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown error'

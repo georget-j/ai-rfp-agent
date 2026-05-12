@@ -56,7 +56,10 @@ export function QueryForm({ initialQuery = '', initialContext = {} }: QueryFormP
   const [retrievedChunks, setRetrievedChunks] = useState<RetrievedChunk[]>([])
   const [partial, setPartial] = useState<PartialRFPResponse | null>(null)
   const [result, setResult] = useState<AskResponse | null>(null)
-  const [routedCount, setRoutedCount] = useState(0)
+  const [pendingReview, setPendingReview] = useState<Array<{ queryId: string; topic: string; teamLabel: string; riskLevel: string; score: number }>>([])
+  const [rfpTitleForRouting, setRfpTitleForRouting] = useState('')
+  const [routingSent, setRoutingSent] = useState(false)
+  const [sendingRouting, setSendingRouting] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -68,7 +71,8 @@ export function QueryForm({ initialQuery = '', initialContext = {} }: QueryFormP
     setPartial(null)
     setQueryId(null)
     setRetrievedChunks([])
-    setRoutedCount(0)
+    setPendingReview([])
+    setRoutingSent(false)
 
     const rfpContext: RFPContext = {}
     if (industry) rfpContext.industry = industry as RFPContext['industry']
@@ -127,7 +131,8 @@ export function QueryForm({ initialQuery = '', initialContext = {} }: QueryFormP
                 unverified_citations_removed: event.removed_citations ?? 0,
               })
             }
-            setRoutedCount(event.routed ?? 0)
+            setPendingReview(event.pending_review ?? [])
+            setRfpTitleForRouting(event.rfp_title ?? query)
             setPhase('done')
           } else if (event.type === 'error') {
             throw new Error(event.message)
@@ -137,6 +142,28 @@ export function QueryForm({ initialQuery = '', initialContext = {} }: QueryFormP
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
       setPhase('idle')
+    }
+  }
+
+  async function sendForReview() {
+    if (!pendingReview.length) return
+    setSendingRouting(true)
+    try {
+      const res = await fetch('/api/review/confirm-routing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: pendingReview.map(({ queryId, topic, riskLevel, score }) => ({ queryId, topic, riskLevel, score })),
+          rfp_title: rfpTitleForRouting,
+        }),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? 'Failed') }
+      setRoutingSent(true)
+      setPendingReview([])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to send for review')
+    } finally {
+      setSendingRouting(false)
     }
   }
 
@@ -224,7 +251,32 @@ export function QueryForm({ initialQuery = '', initialContext = {} }: QueryFormP
 
       {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}
 
-      {phase === 'done' && routedCount > 0 && (
+      {phase === 'done' && pendingReview.length > 0 && (
+        <div style={{
+          padding: '14px 16px',
+          background: 'var(--warn-tint, color-mix(in oklch, var(--warn) 10%, var(--surface)))',
+          border: '1px solid color-mix(in oklch, var(--warn) 25%, transparent)',
+          borderRadius: 'var(--r-sm)',
+        }}>
+          <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>
+            This answer may need human review
+          </p>
+          <p style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.5 }}>
+            Confidence is {Math.round((pendingReview[0]?.score ?? 0) * 100)}% — routed to{' '}
+            <strong>{pendingReview[0]?.teamLabel}</strong>. Send for review?
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={sendForReview} disabled={sendingRouting} className="btn accent sm">
+              {sendingRouting ? 'Sending…' : 'Yes, send for review'}
+            </button>
+            <button onClick={() => setPendingReview([])} disabled={sendingRouting} className="btn ghost sm">
+              Skip
+            </button>
+          </div>
+        </div>
+      )}
+
+      {phase === 'done' && routingSent && (
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -236,7 +288,7 @@ export function QueryForm({ initialQuery = '', initialContext = {} }: QueryFormP
           borderRadius: 'var(--r-sm)',
         }}>
           <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--accent)', margin: 0 }}>
-            {routedCount} answer{routedCount !== 1 ? 's' : ''} sent for human review
+            Sent for human review
           </p>
           <Link href="/review" className="btn accent sm">View review queue →</Link>
         </div>

@@ -14,6 +14,46 @@ type AnsweredItem = {
   response: RFPResponse
 }
 
+export type RoutingCandidate = {
+  queryId: string
+  questionText: string
+  topic: string
+  teamLabel: string
+  riskLevel: string
+  score: number
+}
+
+const TOPIC_LABEL: Record<string, string> = {
+  security_compliance: 'Security & Compliance',
+  legal: 'Legal',
+  pricing: 'Pricing',
+  technical: 'Technical',
+  engineering: 'Engineering',
+  commercial: 'Commercial',
+  implementation: 'Implementation',
+  support: 'Support',
+  general: 'General',
+}
+
+export async function computeRoutingCandidates(items: AnsweredItem[]): Promise<RoutingCandidate[]> {
+  const candidates: RoutingCandidate[] = []
+  for (const item of items) {
+    const score = computeConfidenceScore(item.response)
+    if (!shouldRoute(score, item.riskLevel)) continue
+    const routingConfig = await getRoutingConfig(item.topic)
+    if (!routingConfig?.owner_email) continue
+    candidates.push({
+      queryId: item.queryId,
+      questionText: item.questionText,
+      topic: item.topic,
+      teamLabel: TOPIC_LABEL[item.topic] ?? item.topic,
+      riskLevel: item.riskLevel,
+      score,
+    })
+  }
+  return candidates
+}
+
 export async function escalateOverdueReviews(): Promise<void> {
   const supabase = getServiceSupabase()
 
