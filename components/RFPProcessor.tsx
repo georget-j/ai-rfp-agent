@@ -48,10 +48,18 @@ export function RFPProcessor() {
       formData.append('file', file)
 
       const res = await fetch('/api/rfp/extract', { method: 'POST', body: formData })
-      const data = await res.json()
+      const text = await res.text()
+      let data: { error?: string; questions?: ExtractedQuestion[] }
+      try {
+        data = JSON.parse(text)
+      } catch {
+        throw new Error(
+          res.ok ? 'Unexpected response from server' : `Server error ${res.status} — try again`
+        )
+      }
       if (!res.ok) throw new Error(data.error ?? 'Extraction failed')
 
-      const extracted: ExtractedQuestion[] = data.questions
+      const extracted: ExtractedQuestion[] = data.questions ?? []
       setQuestions(extracted)
       setSelected(new Set(extracted.map((q) => q.id)))
       setStep('reviewing')
@@ -168,7 +176,10 @@ export function RFPProcessor() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rfpTitle, items }),
       })
-      if (!res.ok) throw new Error('Export failed')
+      if (!res.ok) {
+        const msg = await res.text().then((t) => { try { return JSON.parse(t).error } catch { return null } })
+        throw new Error(msg ?? `Export failed (${res.status})`)
+      }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
