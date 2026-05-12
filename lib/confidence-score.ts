@@ -20,7 +20,11 @@ export function computeConfidenceScore(response: RFPResponse): number {
 }
 
 export function shouldRoute(score: number, riskLevel: string): boolean {
-  return score < ROUTING_THRESHOLD || riskLevel === 'high'
+  return score < FLAG_THRESHOLD || riskLevel === 'high'
+}
+
+export function isOptionalReview(score: number, riskLevel: string): boolean {
+  return score >= ROUTING_THRESHOLD && score < FLAG_THRESHOLD && riskLevel !== 'high'
 }
 
 export function shouldFlag(score: number): boolean {

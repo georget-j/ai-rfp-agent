@@ -46,6 +46,9 @@ const TOPIC_LABEL: Record<string, string> = {
   general: 'General',
 }
 
+const ROUTING_THRESHOLD = 0.60
+const FLAG_THRESHOLD = 0.75
+
 const SUGGESTED_OWNER_LABEL: Record<string, string> = {
   product: 'Product',
   engineering: 'Engineering',
@@ -239,8 +242,36 @@ export function ReviewCard({ review }: { review: ReviewRequest }) {
     )
   }
 
+  const isOptional =
+    review.confidence_score !== null &&
+    review.confidence_score >= ROUTING_THRESHOLD &&
+    review.confidence_score < FLAG_THRESHOLD &&
+    review.risk_level !== 'high'
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Advisory banner for medium-confidence reviews */}
+      {isOptional && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 10,
+          padding: '10px 14px',
+          background: 'var(--bg-tint)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--r-sm)',
+          fontSize: 13,
+          color: 'var(--muted)',
+          lineHeight: 1.5,
+        }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>ℹ</span>
+          <p>
+            <strong style={{ color: 'var(--ink)' }}>Advisory review</strong> — the AI confidence on this answer is moderate ({Math.round((review.confidence_score ?? 0) * 100)}%).
+            {' '}Review is not strictly required but may be worthwhile if the topic is sensitive.
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="card card-pad" style={{ borderLeft: '3px solid var(--accent)', borderRadius: 'var(--r-md)' }}>
         <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>{rfpTitle}</p>

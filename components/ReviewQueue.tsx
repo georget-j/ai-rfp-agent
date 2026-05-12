@@ -3,6 +3,14 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 
+const ROUTING_THRESHOLD = 0.60
+const FLAG_THRESHOLD = 0.75
+
+function isOptionalReview(score: number | null, riskLevel: string): boolean {
+  if (score === null) return false
+  return score >= ROUTING_THRESHOLD && score < FLAG_THRESHOLD && riskLevel !== 'high'
+}
+
 type ReviewItem = {
   id: string
   query_id: string
@@ -241,6 +249,7 @@ export function ReviewQueue() {
             const isPending = item.status === 'pending' || item.status === 'assigned' || item.status === 'escalated'
             const sla = isPending ? slaInfo(item.due_at) : null
             const isSelected = selected.has(item.id)
+            const optional = isOptionalReview(item.confidence_score, item.risk_level)
 
             return (
               <div
@@ -287,6 +296,11 @@ export function ReviewQueue() {
                     {item.confidence_score !== null && (
                       <span style={{ fontSize: 11.5, fontWeight: 500, color: confColor(item.confidence_score) }}>
                         {Math.round(item.confidence_score * 100)}% conf
+                      </span>
+                    )}
+                    {optional && (
+                      <span className="badge mono" style={{ fontSize: 10.5, background: 'var(--bg-tint)', color: 'var(--muted)', border: '1px solid var(--border)' }}>
+                        advisory
                       </span>
                     )}
                     {item.assigned_to && (
