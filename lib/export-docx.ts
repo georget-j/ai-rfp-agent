@@ -5,6 +5,9 @@ import {
   TextRun,
   HeadingLevel,
   BorderStyle,
+  AlignmentType,
+  PageBreak,
+  ShadingType,
 } from 'docx'
 import type { RFPResponse } from './schema'
 
@@ -15,24 +18,66 @@ export type BatchItem = {
   editedDraft?: string
 }
 
-function heading(text: string, level: (typeof HeadingLevel)[keyof typeof HeadingLevel]) {
-  return new Paragraph({ text, heading: level })
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const FONT = 'Calibri'
+
+const CONFIDENCE_COLOR: Record<string, string> = {
+  high: '16A34A',
+  medium: 'D97706',
+  low: 'DC2626',
 }
 
-function body(text: string) {
-  return new Paragraph({ children: [new TextRun({ text, size: 22 })] })
+function t(
+  text: string,
+  opts: { bold?: boolean; size?: number; color?: string; italics?: boolean } = {},
+) {
+  return new TextRun({ text, font: FONT, size: opts.size ?? 22, ...opts })
 }
 
-function bullet(text: string) {
+function heading1(text: string) {
   return new Paragraph({
-    children: [new TextRun({ text: `• ${text}`, size: 22 })],
-    indent: { left: 360 },
+    heading: HeadingLevel.HEADING_1,
+    spacing: { before: 320, after: 160 },
+    children: [new TextRun({ text, font: FONT, bold: true, size: 32, color: '111827' })],
   })
 }
 
-function gap() {
-  return new Paragraph({ text: '' })
+function heading2(text: string) {
+  return new Paragraph({
+    heading: HeadingLevel.HEADING_2,
+    spacing: { before: 240, after: 120 },
+    children: [new TextRun({ text, font: FONT, bold: true, size: 26, color: '1F2937' })],
+  })
 }
+
+function body(text: string) {
+  return new Paragraph({
+    spacing: { after: 120 },
+    children: [t(text)],
+  })
+}
+
+function label(text: string) {
+  return new Paragraph({
+    spacing: { before: 200, after: 80 },
+    children: [t(text, { bold: true, size: 20, color: '6B7280' })],
+  })
+}
+
+function divider() {
+  return new Paragraph({
+    border: { bottom: { style: BorderStyle.SINGLE, size: 2, color: 'E5E7EB' } },
+    spacing: { before: 320, after: 320 },
+    children: [],
+  })
+}
+
+function gap(pts = 160) {
+  return new Paragraph({ spacing: { after: pts }, children: [] })
+}
+
+// ── Single response export ────────────────────────────────────────────────────
 
 export async function generateDocx(
   query: string,
@@ -40,78 +85,113 @@ export async function generateDocx(
   editedDraft?: string,
 ): Promise<Buffer> {
   const draft = editedDraft ?? response.draft_answer
+  const confColor = CONFIDENCE_COLOR[response.confidence.level] ?? '374151'
 
-  const children = [
-    heading('RFP Response', HeadingLevel.HEADING_1),
-    gap(),
-
-    heading('Question / Requirement', HeadingLevel.HEADING_2),
-    body(query),
-    gap(),
-
-    heading('Executive Summary', HeadingLevel.HEADING_2),
-    body(response.executive_summary),
-    gap(),
-
+  const children: Paragraph[] = [
+    // Title
     new Paragraph({
+      spacing: { after: 80 },
+      children: [t('RFP Response', { bold: true, size: 52, color: '111827' })],
+    }),
+    new Paragraph({
+      border: { bottom: { style: BorderStyle.SINGLE, size: 2, color: 'E5E7EB' } },
+      spacing: { after: 400 },
+      children: [],
+    }),
+
+    // Question
+    heading2('Requirement'),
+    new Paragraph({
+      spacing: { after: 240 },
+      children: [t(query, { bold: true, size: 24, color: '111827' })],
+    }),
+
+    // Executive summary — accented block
+    label('Executive Summary'),
+    new Paragraph({
+      indent: { left: 360 },
+      border: { left: { style: BorderStyle.THICK, size: 10, color: '3B82F6' } },
+      shading: { type: ShadingType.SOLID, color: 'F0F7FF' },
+      spacing: { before: 80, after: 240 },
+      children: [t(response.executive_summary, { size: 22, color: '1E3A5F' })],
+    }),
+
+    // Confidence
+    new Paragraph({
+      spacing: { before: 80, after: 240 },
       children: [
-        new TextRun({ text: 'Confidence: ', bold: true, size: 22 }),
-        new TextRun({
-          text: `${response.confidence.level.toUpperCase()} — ${response.confidence.reason}`,
-          size: 22,
-        }),
+        t('Confidence  ', { bold: true, size: 20, color: '374151' }),
+        t(response.confidence.level.toUpperCase(), { bold: true, size: 20, color: confColor }),
+        t(`  —  ${response.confidence.reason}`, { size: 20, color: '6B7280' }),
       ],
     }),
-    gap(),
 
-    heading('Full Response', HeadingLevel.HEADING_2),
-    ...draft.split('\n\n').map((para) => body(para)),
+    // Full response
+    heading2('Full Response'),
+    ...draft.split('\n\n').filter(Boolean).map(body),
     gap(),
   ]
 
-  if (response.missing_information.length > 0) {
-    children.push(heading('Information Required', HeadingLevel.HEADING_2))
-    for (const item of response.missing_information) {
-      children.push(
-        bullet(`[${item.suggested_owner.toUpperCase()}] ${item.item} — ${item.why_it_matters}`),
-      )
-    }
-    children.push(gap())
-  }
-
+  // Citations
   if (response.citations.length > 0) {
-    children.push(heading('Source Citations', HeadingLevel.HEADING_2))
+    children.push(label('Source Citations'))
     for (const c of response.citations) {
-      const excerpt =
-        c.excerpt.length > 160 ? c.excerpt.slice(0, 157) + '…' : c.excerpt
+      const excerpt = c.excerpt.length > 200 ? c.excerpt.slice(0, 197) + '…' : c.excerpt
       children.push(
         new Paragraph({
-          children: [
-            new TextRun({ text: `${c.source_title}: `, bold: true, size: 20 }),
-            new TextRun({ text: `"${excerpt}"`, italics: true, size: 20, color: '555555' }),
-          ],
           indent: { left: 360 },
-          border: { left: { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC' } },
+          border: { left: { style: BorderStyle.SINGLE, size: 6, color: 'CBD5E1' } },
+          spacing: { after: 100 },
+          children: [
+            t(`${c.source_title}  `, { bold: true, size: 20, color: '374151' }),
+            t(`"${excerpt}"`, { italics: true, size: 20, color: '6B7280' }),
+          ],
         }),
       )
     }
     children.push(gap())
   }
 
+  // Missing information
+  if (response.missing_information.length > 0) {
+    children.push(label('Information Required'))
+    for (const mi of response.missing_information) {
+      children.push(
+        new Paragraph({
+          indent: { left: 360 },
+          spacing: { after: 100 },
+          children: [
+            t(`[${mi.suggested_owner.toUpperCase()}]  `, { bold: true, size: 20, color: 'D97706' }),
+            t(`${mi.item} — ${mi.why_it_matters}`, { size: 20, color: '374151' }),
+          ],
+        }),
+      )
+    }
+    children.push(gap())
+  }
+
+  // Next actions
   if (response.suggested_next_actions.length > 0) {
-    children.push(heading('Suggested Next Actions', HeadingLevel.HEADING_2))
+    children.push(label('Suggested Next Actions'))
     for (const action of response.suggested_next_actions) {
-      children.push(bullet(action))
+      children.push(
+        new Paragraph({
+          indent: { left: 360 },
+          spacing: { after: 80 },
+          children: [t(`• ${action}`, { size: 20 })],
+        }),
+      )
     }
   }
 
   const doc = new Document({
-    sections: [{ children }],
     creator: 'AI RFP Agent',
+    sections: [{ children }],
   })
-
   return Packer.toBuffer(doc)
 }
+
+// ── Batch export ──────────────────────────────────────────────────────────────
 
 export async function generateBatchDocx(rfpTitle: string, items: BatchItem[]): Promise<Buffer> {
   const sectionMap = new Map<string, BatchItem[]>()
@@ -121,46 +201,166 @@ export async function generateBatchDocx(rfpTitle: string, items: BatchItem[]): P
     sectionMap.set(item.section, arr)
   }
 
-  const children: Paragraph[] = [
-    heading('RFP Response Document', HeadingLevel.HEADING_1),
-    body(rfpTitle),
-    gap(),
-  ]
+  const children: Paragraph[] = []
 
+  // Cover block
+  children.push(
+    new Paragraph({
+      spacing: { after: 120 },
+      children: [t('RFP Response Document', { bold: true, size: 52, color: '111827' })],
+    }),
+    new Paragraph({
+      spacing: { after: 80 },
+      children: [t(rfpTitle, { size: 28, color: '374151' })],
+    }),
+    new Paragraph({
+      border: { bottom: { style: BorderStyle.SINGLE, size: 2, color: 'E5E7EB' } },
+      spacing: { after: 80 },
+      children: [
+        t(
+          new Date().toLocaleDateString('en-GB', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          }),
+          { size: 20, color: '9CA3AF' },
+        ),
+      ],
+    }),
+    gap(600),
+  )
+
+  let sectionIndex = 0
   for (const [sectionName, sectionItems] of sectionMap) {
-    children.push(heading(sectionName, HeadingLevel.HEADING_2))
+    // Page break before every section except the first
+    if (sectionIndex > 0) {
+      children.push(new Paragraph({ children: [new PageBreak()] }))
+    }
+    sectionIndex++
 
+    children.push(heading1(sectionName))
+
+    let qNum = 1
     for (const item of sectionItems) {
       const draft = item.editedDraft ?? item.response.draft_answer
+      const confColor = CONFIDENCE_COLOR[item.response.confidence.level] ?? '374151'
 
+      // Question heading
       children.push(
         new Paragraph({
-          children: [new TextRun({ text: item.question, bold: true, size: 22 })],
-        }),
-      )
-      children.push(body(item.response.executive_summary))
-      children.push(gap())
-
-      for (const para of draft.split('\n\n')) {
-        children.push(body(para))
-      }
-
-      children.push(
-        new Paragraph({
+          spacing: { before: 320, after: 160 },
           children: [
-            new TextRun({ text: 'Confidence: ', bold: true, size: 20 }),
-            new TextRun({
-              text: `${item.response.confidence.level.toUpperCase()} — ${item.response.confidence.reason}`,
-              size: 20,
-              color: '666666',
-            }),
+            t(`Q${qNum}.  `, { bold: true, size: 26, color: '6B7280' }),
+            t(item.question, { bold: true, size: 26, color: '111827' }),
           ],
         }),
       )
-      children.push(gap())
+
+      // Executive summary
+      children.push(
+        new Paragraph({
+          indent: { left: 360 },
+          border: { left: { style: BorderStyle.THICK, size: 10, color: '3B82F6' } },
+          shading: { type: ShadingType.SOLID, color: 'F0F7FF' },
+          spacing: { before: 80, after: 200 },
+          children: [t(item.response.executive_summary, { size: 22, color: '1E3A5F' })],
+        }),
+      )
+
+      // Confidence
+      children.push(
+        new Paragraph({
+          spacing: { before: 80, after: 200 },
+          children: [
+            t('Confidence  ', { bold: true, size: 20, color: '374151' }),
+            t(item.response.confidence.level.toUpperCase(), {
+              bold: true,
+              size: 20,
+              color: confColor,
+            }),
+            t(`  —  ${item.response.confidence.reason}`, { size: 20, color: '6B7280' }),
+          ],
+        }),
+      )
+
+      // Full response
+      children.push(
+        new Paragraph({
+          spacing: { before: 160, after: 100 },
+          children: [t('Response', { bold: true, size: 22, color: '374151' })],
+        }),
+      )
+      for (const para of draft.split('\n\n').filter(Boolean)) {
+        children.push(body(para))
+      }
+
+      // Citations
+      if (item.response.citations.length > 0) {
+        children.push(label('Sources'))
+        for (const c of item.response.citations) {
+          const excerpt = c.excerpt.length > 200 ? c.excerpt.slice(0, 197) + '…' : c.excerpt
+          children.push(
+            new Paragraph({
+              indent: { left: 360 },
+              border: { left: { style: BorderStyle.SINGLE, size: 4, color: 'CBD5E1' } },
+              spacing: { after: 80 },
+              children: [
+                t(`${c.source_title}  `, { bold: true, size: 18, color: '374151' }),
+                t(`"${excerpt}"`, { italics: true, size: 18, color: '6B7280' }),
+              ],
+            }),
+          )
+        }
+      }
+
+      // Missing information
+      if (item.response.missing_information.length > 0) {
+        children.push(label('Information Required'))
+        for (const mi of item.response.missing_information) {
+          children.push(
+            new Paragraph({
+              indent: { left: 360 },
+              spacing: { after: 80 },
+              children: [
+                t(`[${mi.suggested_owner.toUpperCase()}]  `, {
+                  bold: true,
+                  size: 18,
+                  color: 'D97706',
+                }),
+                t(`${mi.item} — ${mi.why_it_matters}`, { size: 18, color: '374151' }),
+              ],
+            }),
+          )
+        }
+      }
+
+      // Next actions
+      if (item.response.suggested_next_actions.length > 0) {
+        children.push(label('Next Actions'))
+        for (const action of item.response.suggested_next_actions) {
+          children.push(
+            new Paragraph({
+              indent: { left: 360 },
+              spacing: { after: 80 },
+              children: [t(`• ${action}`, { size: 18, color: '374151' })],
+            }),
+          )
+        }
+      }
+
+      // Divider between questions (skip after last in section)
+      if (qNum < sectionItems.length) {
+        children.push(divider())
+      }
+
+      qNum++
     }
   }
 
-  const doc = new Document({ sections: [{ children }], creator: 'AI RFP Agent' })
+  const doc = new Document({
+    creator: 'AI RFP Agent',
+    description: rfpTitle,
+    sections: [{ children }],
+  })
   return Packer.toBuffer(doc)
 }
