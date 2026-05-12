@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { SampleDataLoader } from '@/components/SampleDataLoader'
 import { getServiceSupabase } from '@/lib/supabase'
-import { fileBadge, EXT_CLASSES } from '@/lib/file-type'
+import { fileBadge } from '@/lib/file-type'
+
+export const dynamic = 'force-dynamic'
 
 async function getKnowledgeBaseStats() {
   try {
